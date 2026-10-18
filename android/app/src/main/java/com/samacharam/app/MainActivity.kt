@@ -47,9 +47,12 @@ class MainActivity:ComponentActivity() {
         val routes=getSharedPreferences("routes",MODE_PRIVATE)
         fun job(block:()->String) { if(busy)return;busy=true;lifecycleScope.launch {status=try{withContext(Dispatchers.IO){block()}}catch(e:Exception){e.message?:"Operation failed"};busy=false} }
         fun refresh()=job { offline.sync(api);val value=api.request("/api/state");offline.cache(value);withContextOnMain{state=value};"Synchronized. ${offline.count()} offline operations remain." }
-        fun mutation(path:String,body:JSONObject) = job {
+        fun mutation(path:String,body:JSONObject) {
+            if(path in setOf("/api/save","/api/history","/api/profile"))body.put("operation_id",java.util.UUID.randomUUID().toString())
+            job {
             try { api.request(path,body);val value=api.request("/api/state");offline.cache(value);withContextOnMain{state=value};"Saved." }
             catch(e:Exception) { if(path in setOf("/api/save","/api/history","/api/profile")){offline.enqueue(path,body);"Queued offline (${offline.count()}). Reconnect to synchronize; conflicting edits remain queued."}else throw e }
+        }
         }
         fun runTask(task:String,text:String) = job {
             val choice=routes.getString(task,"host")?:"host"
@@ -93,7 +96,7 @@ class MainActivity:ComponentActivity() {
                         taskNames.forEach { task->
                             var chosen by remember(task,status){mutableStateOf(routes.getString(task,"host")?:"host")}
                             var expanded by remember{mutableStateOf(false)}
-                            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Text(task);Box {TextButton(onClick={expanded=true}){Text(chosen)};DropdownMenu(expanded,{expanded=false}){(listOf("host")+bundles).forEach { name->DropdownMenuItem(text={Text(name)},onClick={routes.edit().putString(task,name).apply();chosen=name;expanded=false})}}}}
+                            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Text(task);Box {TextButton(onClick={expanded=true}){Text(chosen)};DropdownMenu(expanded,{expanded=false}){(listOf("host")+bundles.filter{device.supports(it,task)}).forEach { name->DropdownMenuItem(text={Text(name)},onClick={routes.edit().putString(task,name).apply();chosen=name;expanded=false})}}}}
                         }
                         var bundle by remember{mutableStateOf("my-model")};var filename by remember{mutableStateOf("model.litertlm")}
                         OutlinedTextField(bundle,{bundle=it},label={Text("Bundle name")})
@@ -123,7 +126,11 @@ class MainActivity:ComponentActivity() {
                         OutlinedTextField(host,{host=it},label={Text("App host URL")},modifier=Modifier.fillMaxWidth())
                         OutlinedTextField(password,{password=it},label={Text("Host password")},visualTransformation=PasswordVisualTransformation())
                         Row {Checkbox(rememberLogin,{rememberLogin=it});Text("Remember encrypted login for background briefing")}
-                        Button(onClick={job{api.configure(host);api.login(password);SecureStore(this@MainActivity).put("remembered-password",if(rememberLogin)password else "");val value=api.request("/api/state");offline.cache(value);withContextOnMain{state=value};"Connected. Host model routes and saved records are synchronized."}},enabled=!busy){Text("Connect")}
+                        Button(onClick={job{require(host.trim().trimEnd('/')==api.base || offline.count()==0){"Export/reconcile or discard queued edits before changing hosts."};api.configure(host);api.login(password);SecureStore(this@MainActivity).put("remembered-password",if(rememberLogin)password else "");val value=api.request("/api/state");offline.cache(value);withContextOnMain{state=value};"Connected. Host model routes and saved records are synchronized."}},enabled=!busy){Text("Connect")}
+                        TextButton(onClick={startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT,offline.pending().toString(2)),"Export pending edits"))}){Text("Export pending offline edits")}
+                        var discardConfirm by remember{mutableStateOf(false)}
+                        TextButton(onClick={discardConfirm=true}){Text("Discard pending offline edits")}
+                        if(discardConfirm)AlertDialog(onDismissRequest={discardConfirm=false},title={Text("Discard queued edits?")},text={Text("Export any conflicting notes first. This cannot be undone.")},confirmButton={TextButton(onClick={offline.discard();discardConfirm=false;status="Pending offline edits discarded."}){Text("Discard")}},dismissButton={TextButton(onClick={discardConfirm=false}){Text("Keep")}})
                         TextButton(onClick={startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(api.base)))}){Text("Open full evidence workspace in browser")}
                         Text("Release builds require HTTPS. Debug emulator uses 10.0.2.2; allow it in SAMACHA_ALLOWED_HOSTS. Queued edits: ${offline.count()}.")
                         Button(onClick={if(Build.VERSION.SDK_INT>=33)permission.launch(Manifest.permission.POST_NOTIFICATIONS);val constraints=Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();WorkManager.getInstance(this@MainActivity).enqueueUniquePeriodicWork("daily-briefing",ExistingPeriodicWorkPolicy.UPDATE,PeriodicWorkRequestBuilder<BriefingWorker>(1,TimeUnit.DAYS).setConstraints(constraints).build());status="Daily background briefing requested. Android may delay work; host access is required."}){Text("Enable daily briefing notification")}

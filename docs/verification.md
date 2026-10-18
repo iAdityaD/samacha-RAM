@@ -16,3 +16,12 @@ Not validated here:
 - Model quality, semantic support of generated statements, production load, licensing clearance for individual sources/models, or the entire v2 roadmap.
 
 The GitHub workflow runs the deterministic Python and Node checks on pushes/PRs. A configured model's Test inference is a real request on the user's host; it does not certify the model's factual quality.
+
+
+## v0.2 validation update
+
+The expanded local suite covers actual fixture-PDF parsing in a subprocess, source-version archives, stale evidence invalidation, no-quote rejection, independent-origin requirements, document rights gates, deterministic watch deduplication, exact annotation references, comparison provenance, model-space isolation, offline idempotency and note conflicts, cancellation flags, request budgets, story candidates, and exposure-aware change notices. JavaScript tests additionally cover offline overlays/conflicts, feedback precedence, and within-layer source diversity.
+
+The Android CI build was exercised on GitHub rather than an unavailable local Android SDK. SDK package and Kotlin/Compose compatibility failures were corrected, and an Android build with native tokenizer unit tests succeeded. The final revision is checked again by both workflows. No physical Android device, pretrained model weights, or paid API key was used. Browser layout screenshots were not produced because a browser runtime was unavailable. The complete remaining validation boundary is in release-v0.2.md.
+
+Final local validation for v0.2: **62 Python tests and 17 JavaScript tests passed**, with JavaScript syntax checks. The Android workflow also builds and runs **3 native tokenizer unit tests**; the final commit status is available in GitHub Actions.

@@ -12,7 +12,7 @@ def now():
 
 
 DEFAULT_PROFILE = {'topics': {'LLMs': 'Core', 'NLP': 'Near', 'Hardware': 'Adjacent', 'AI audio': 'Adjacent', 'AI video': 'Discovery', 'Software': 'Near'}, 'budget': 15, 'tracking': True, 'local_only': False, 'cloud_fallback': False, 'theme': 'light', 'digest_hour': '08:00', 'timezone': 'Asia/Kolkata'}
-RECORDS = ('articles','sources','providers','missions','queries','outputs','jobs','documents','claims','reviews','relations','watches','alerts','feedback','annotations','vectors','operations','comparisons','versions')
+RECORDS = ('articles','sources','providers','missions','queries','outputs','jobs','documents','claims','reviews','relations','watches','alerts','feedback','annotations','vectors','operations','comparisons','versions','stories')
 
 
 class Store:
@@ -44,7 +44,9 @@ class Store:
         self.db.commit()
         for table in RECORDS:
             self.db.execute(f'CREATE TABLE IF NOT EXISTS {table}(id TEXT PRIMARY KEY, body TEXT NOT NULL)')
-        self.db.execute('PRAGMA user_version=2')
+        if 'version' not in [r[1] for r in self.db.execute('PRAGMA table_info(history)')]:
+            self.db.execute('ALTER TABLE history ADD COLUMN version TEXT')
+        self.db.execute('PRAGMA user_version=3')
         self.db.commit()
 
     def put(self, table, id, body):
@@ -59,10 +61,11 @@ class Store:
                         self.db.execute('INSERT OR IGNORE INTO versions VALUES (?,?)',(id+':'+previous['version'],json.dumps(previous)))
                         for derived in ('outputs','vectors'):
                             self.db.execute(f"DELETE FROM {derived} WHERE json_extract(body,'$.article_id')=?",(id,))
-                        for review in self.items('reviews'):
-                            if any(x.get('article_id')==id for x in review.get('evidence',[])):
-                                review['stale']=True
-                                self.db.execute('UPDATE reviews SET body=? WHERE id=?',(json.dumps(review),review['id']))
+                        for table_name in ('reviews','relations','annotations','comparisons'):
+                            for derived_record in self.items(table_name):
+                                if id in json.dumps(derived_record):
+                                    derived_record['stale']=True
+                                    self.db.execute(f'UPDATE {table_name} SET body=? WHERE id=?',(json.dumps(derived_record),derived_record['id']))
             self.db.execute(f'INSERT OR REPLACE INTO {table}(id,body) VALUES (?,?)', (id, json.dumps(body)))
 
     def items(self, table):
@@ -103,11 +106,13 @@ class Store:
             return [dict(x) for x in self.db.execute('SELECT * FROM saved ORDER BY created DESC')]
 
     def event(self, id, kind):
-        if kind not in ('metadata_open', 'summary_open', 'original_open', 'mark_read'):
+        if kind not in ('metadata_open', 'summary_open', 'original_open', 'mark_read', 'document_open'):
             raise ValueError('Invalid reading event')
         if self.profile()['tracking']:
             with self.lock, self.db:
-                self.db.execute('INSERT INTO history(article,kind,created) VALUES (?,?,?)', (id, kind, now()))
+                row=self.db.execute('SELECT body FROM articles WHERE id=?',(id,)).fetchone()
+                version=json.loads(row['body']).get('version') if row else None
+                self.db.execute('INSERT INTO history(article,kind,created,version) VALUES (?,?,?,?)', (id, kind, now(),version))
 
     def history(self):
         with self.lock:
@@ -118,6 +123,10 @@ class Store:
             self.db.execute('DELETE FROM history')
             self.db.execute('DELETE FROM outputs')
             self.db.execute('DELETE FROM feedback')
+            self.db.execute("DELETE FROM jobs WHERE json_extract(body,'$.kind')='inference'")
+            for operation in self.items('operations'):
+                operation['result']={'redacted_after_history_clear':True}
+                self.db.execute('UPDATE operations SET body=? WHERE id=?',(json.dumps(operation),operation['id']))
             self.db.execute("DELETE FROM settings WHERE id='behavior'")
 
     def encrypt(self, key):

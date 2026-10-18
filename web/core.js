@@ -6,7 +6,7 @@ export function layerOf(article, profile) {
   if (ls.includes('Muted')) return 'Muted';
   return ls.sort((a,b) => weights[b]-weights[a])[0] || 'Discovery';
 }
-export function rankArticles(articles, profile, {query='',kind='All',layer='All',mode='For you',mission=null,following=[]}={}) {
+export function rankArticles(articles, profile, {query='',kind='All',layer='All',mode='For you',mission=null,following=[],feedback=[],clock=Date.now()}={}) {
   const words=query.toLowerCase().trim().split(/\s+/).filter(Boolean);
   let rows=articles.filter(a => {
     if(layerOf(a,profile)==='Muted') return false;
@@ -21,7 +21,18 @@ export function rankArticles(articles, profile, {query='',kind='All',layer='All'
   // Prefer a fetched source record over a historical starter for the same URL.
   rows.sort((a,b)=>Number(Boolean(a.starter))-Number(Boolean(b.starter)));
   rows=rows.filter(a=>{const key=a.url.replace(/\/$/,''); if(seen.has(key)) return false; seen.add(key); return true;});
-  rows.sort((a,b) => (mode==='Following'?0:weights[layerOf(b,profile)]-weights[layerOf(a,profile)]) || (b.published||'').localeCompare(a.published||'') || a.id.localeCompare(b.id));
+  const inferred=a=>mission?0:feedback.reduce((n,f)=>{
+    const age=Math.max(0,(clock-new Date(f.created).getTime())/86400000);
+    const sign=f.reason==='useful'?1:f.reason==='less_relevant'?-1:0;
+    const match=(f.topics||[]).some(t=>a.topics.includes(t));
+    return n+(match?sign*(.65*Math.exp(-age/7)+.35*Math.exp(-age/60)):0)-(f.article_id===a.id&&f.reason==='duplicate'?2:0);
+  },0);
+  rows.sort((a,b) => (mode==='Following'?0:weights[layerOf(b,profile)]-weights[layerOf(a,profile)]) || (mode==='Following'?0:inferred(b)-inferred(a)) || (b.published||'').localeCompare(a.published||'') || a.id.localeCompare(b.id));
+  if(mode!=='Following'){
+    const diverse=[];
+    while(rows.length){let index=0;if(diverse.length>=2&&diverse.at(-1).source_id===diverse.at(-2).source_id&&rows[0].source_id===diverse.at(-1).source_id){const i=rows.findIndex(a=>a.source_id!==diverse.at(-1).source_id&&layerOf(a,profile)===layerOf(rows[0],profile));if(i>=0)index=i;}diverse.push(rows.splice(index,1)[0]);}
+    return diverse;
+  }
   return rows;
 }
 export function readingQueue(articles, minutes) {

@@ -15,7 +15,7 @@ class OfflineStore(context: Context): SQLiteOpenHelper(context,"offline.db",null
     fun cache(state: JSONObject) { val temp=File(cache.path+".tmp");temp.writeText(state.toString());check(temp.renameTo(cache)) }
     fun enqueue(path:String,body:JSONObject) {
         require(path in setOf("/api/save","/api/history","/api/profile"))
-        val id=UUID.randomUUID().toString();body.put("operation_id",id)
+        val id=body.optString("operation_id").ifBlank{UUID.randomUUID().toString()};body.put("operation_id",id)
         writableDatabase.execSQL("INSERT INTO queue VALUES (?,?,?)",arrayOf(id,path,body.toString()))
     }
     fun sync(api:ApiClient):Int {
@@ -29,4 +29,10 @@ class OfflineStore(context: Context): SQLiteOpenHelper(context,"offline.db",null
         return sent
     }
     fun count():Int=readableDatabase.rawQuery("SELECT COUNT(*) FROM queue",null).use{it.moveToFirst();it.getInt(0)}
+    fun pending():org.json.JSONArray {
+        val result=org.json.JSONArray()
+        readableDatabase.rawQuery("SELECT id,path,body FROM queue ORDER BY rowid",null).use { c->while(c.moveToNext())result.put(JSONObject().put("id",c.getString(0)).put("path",c.getString(1)).put("body",JSONObject(c.getString(2)))) }
+        return result
+    }
+    fun discard() { writableDatabase.delete("queue",null,null) }
 }

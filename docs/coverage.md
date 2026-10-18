@@ -1,5 +1,7 @@
 # Requirement coverage and next milestones
 
+**v0.2 update:** the table below records the first release for historical comparison. The current implementation and its precise limits are documented in [release-v0.2.md](release-v0.2.md). Native Android, compatible device inference, documents/PDF downloads, versioned evidence, story workflows, semantic retrieval, watchlists, feedback adaptation, offline replay, and citation exports have now been added. This is not a claim that all original production gates are complete.
+
 Status is about actual behavior in this repository, not feature descriptions in referenced projects.
 
 | Requirement area | Status | Evidence / limitation |

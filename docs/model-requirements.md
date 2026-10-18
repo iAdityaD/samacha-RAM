@@ -21,7 +21,7 @@ Added 18 October 2026 from the user's instruction for `samacha-RAM`.
 
 “Open source” does not imply interchangeable file formats or task architectures. The selected model's license, tokenizer, context size, hardware/RAM, architecture, and task all matter. A classifier must expose meaningful topic/NLI output. A sentiment classifier is not automatically a domain classifier. A summarizer should support summarization. Chat generation and embeddings use different API payloads. Pair classification labels are not normalized without an explicit label schema.
 
-The current application does not load native Android models. An on-device Android engine (such as a separately evaluated ONNX or llama.cpp integration) needs a future native client, memory/download lifecycle, and hardware testing. Do not describe app-host local inference as on-phone inference.
+v0.2 adds a native Android client: supported ONNX uncased BERT tasks and LiteRT-LM bundles can run directly on the phone. The host Transformers and Ollama adapters remain host-local. Physical-device model quality, battery, and RAM testing are still required; see release-v0.2.md for exact format contracts.
 
 ## Future model controls
 

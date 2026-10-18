@@ -21,9 +21,26 @@ from .feeds import canonical, refresh, seed
 from .models import Router, ModelError, TASKS
 from .network import NetworkError, resolve
 from .store import Store, now
-from .workspace import Workspace, bibliography
+from .workspace import Workspace, bibliography, annotation_markdown
 
 WEB=Path(__file__).resolve().parent.parent/'web'
+
+class BoundedHTTPServer(ThreadingHTTPServer):
+    """Single-owner host: cap connection threads instead of unbounded allocation."""
+    daemon_threads=True
+    def __init__(self,*args,**kwargs):
+        self.slots=threading.BoundedSemaphore(24)
+        super().__init__(*args,**kwargs)
+    def process_request(self,request,address):
+        if not self.slots.acquire(blocking=False):
+            try:request.sendall(b'HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n')
+            finally:self.shutdown_request(request)
+            return
+        try:super().process_request(request,address)
+        except BaseException:self.slots.release();raise
+    def process_request_thread(self,request,address):
+        try:super().process_request_thread(request,address)
+        finally:self.slots.release()
 
 
 class App:
@@ -50,6 +67,7 @@ class App:
             try:
                 sources=refresh(self.store)
                 self.workspace.scan_watches()
+                self.workspace.suggest_stories()
                 route=self.store.setting('routes',{}).get('classification',{}).get('primary','builtin')
                 if route!='builtin':
                     # A strict batch bound prevents an expensive whole-library inference sweep.
@@ -230,6 +248,8 @@ class App:
         app=self
         class Handler(BaseHTTPRequestHandler):
             server_version='SamachaRAM/0.1'
+            def setup(self):
+                super().setup();self.connection.settimeout(30)
             def log_message(self,*args): pass
             def json(self,status,value,headers=None):
                 self.send_response(status); self.send_header('Content-Type','application/json; charset=utf-8'); self.send_header('Cache-Control','no-store'); self.security()
@@ -262,16 +282,23 @@ class App:
                     if not self.sid(): self.json(401,{'error':'Sign in to this app host.'}); return
                     if path=='/api/state': self.json(200,app.state())
                     elif path=='/api/bundles': self.json(200,{'bundles':app.router.bundles()})
+                    elif path.startswith('/api/story/'):
+                        try:self.json(200,app.workspace.story(path.rsplit('/',1)[-1]))
+                        except ValueError:self.json(404,{'error':'Story not found.'})
                     elif path.startswith('/api/document/'):
-                        id=path.rsplit('/',1)[-1];doc=app.workspace.get('documents',id)
+                        id=path.rsplit('/',1)[-1]
+                        try:doc=app.workspace.get('documents',id)
+                        except ValueError:self.json(404,{'error':'Document not found.'});return
                         if 'download=1' in self.path and doc['format']=='pdf':
-                            file=app.store.root/'documents'/(doc['id']+'.pdf')
+                            file=app.store.root/'documents'/(doc['version']+'.pdf')
                             self.send_response(200);self.send_header('Content-Type','application/pdf');self.send_header('Content-Disposition','attachment; filename="paper-'+id[:12]+'.pdf"');self.security();self.end_headers();self.wfile.write(file.read_bytes())
                         else:self.json(200,doc)
                     elif path in ('/api/bibtex','/api/ris'):
                         ids={x['id'] for x in app.store.saved()};rows=[a for a in app.store.items('articles') if a['id'] in ids]
                         data=bibliography(rows,'bibtex' if path.endswith('bibtex') else 'ris').encode()
                         self.send_response(200);self.send_header('Content-Type','text/plain; charset=utf-8');self.send_header('Content-Disposition','attachment; filename="samacha.'+('bib' if path.endswith('bibtex') else 'ris')+'"');self.security();self.end_headers();self.wfile.write(data)
+                    elif path=='/api/markdown':
+                        self.send_response(200);self.send_header('Content-Type','text/markdown; charset=utf-8');self.send_header('Content-Disposition','attachment; filename="samacha-notes.md"');self.security();self.end_headers();self.wfile.write(annotation_markdown(app.store).encode())
                     elif path=='/api/export':
                         state=app.state(); state.pop('models',None)
                         self.json(200,state,{'Content-Disposition':'attachment; filename="samacha-library.json"'})
@@ -362,7 +389,7 @@ def main():
     args=parser.parse_args(); password=os.environ.get('SAMACHA_PASSWORD','')
     if args.host not in ('127.0.0.1','localhost','::1') and not password:
         parser.error('Set SAMACHA_PASSWORD before exposing the single-owner app beyond loopback. Configure trusted hosts and use a TLS reverse proxy.')
-    app=App(args.data,password); httpd=ThreadingHTTPServer((args.host,args.port),app.handler())
+    app=App(args.data,password); httpd=BoundedHTTPServer((args.host,args.port),app.handler())
     threading.Thread(target=app.scheduler,daemon=True).start()
     print(f'samacha-RAM is running at http://{args.host}:{args.port}. Single-owner data is stored locally. Press Ctrl+C to stop.')
     try: httpd.serve_forever()

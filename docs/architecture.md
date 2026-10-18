@@ -33,3 +33,12 @@ Feeds remain readable when optional AI libraries or providers are absent. Classi
 ## ADR-007: Scope and exit path
 
 The host is intentionally single-user. APIs and pure ranking logic can support a future native client, but this release does not supply native bindings. A later backend can replace JSON-body SQLite tables with typed migrations and multi-tenant authorization. Provider interfaces can be extracted without changing per-task routing semantics. The complete future scope is preserved in requirements, with implementation status in the coverage document.
+
+
+## ADR-008: Native and evidence extension (v0.2)
+
+The Android module now uses Kotlin/Compose with ONNX Runtime and LiteRT-LM adapters; native keys/cookies use Android Keystore AES-GCM, and device routes contain no network fallback. Host model adapters remain distinct. A GitHub Android workflow compiles the debug APK and tests WordPiece behavior. Heavy pretrained-model quality is not inferred from a successful build.
+
+The workspace module adds versioned document anchors, rights-confirmed download jobs, bounded PDF subprocess parsing, attributed owner assessments, typed/cited relationships, candidate story groups, recorded-exposure timelines, watchlists, and compatible semantic indexes. SQLite schema version 3 includes archived source records and reading-event version IDs. Offline replay has idempotency records and note-base conflict checks. Input/output/time budgets and cooperative cancellation are explicit.
+
+The host remains single-owner. A non-root container and TLS gateway configuration are supplied for evaluation; they have not been deployed or load-certified. Native background work is inexact and requires valid host access. Source/model quality, licensing, and physical-device performance remain evaluated separately.

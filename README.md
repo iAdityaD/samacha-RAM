@@ -1,8 +1,10 @@
 # samacha-RAM
 
+**Update — 18 October 2026:** this repository now also includes a native Kotlin/Compose Android client, on-device ONNX and LiteRT-LM adapters, a versioned document/evidence workspace, offline edit replay, watchlists, and model-backed retrieval. See [the v0.2 guide](docs/release-v0.2.md) for the current feature matrix, Android setup, and remaining validation limits. Earlier foundation notes below are retained where useful; the v0.2 guide takes precedence where functionality changed.
+
 **Your interests. Your sources. Your models.**
 
-A self-hosted, single-owner research and news workspace based on the InterestAtlas v2 specification. The responsive interface works on desktop and Android browsers and includes an installable PWA shell. This release is a working foundation, not the entire production roadmap or a native Android APK.
+A self-hosted, single-owner research and news workspace based on the InterestAtlas v2 specification. The responsive interface works on desktop and Android browsers and includes an installable PWA shell. This remains a single-owner application; a native Android client now lives under `android/`. The full production roadmap is not claimed complete.
 
 ## Run
 
@@ -91,7 +93,7 @@ Task architectures: zero-shot NLI for classification; summarization-compatible s
 
 Models run on CPU in a serialized local inference lane; only one pipeline is retained in memory. Hosted/API tasks have a maximum of two concurrent inference requests. Large models may exceed available RAM. Transformers-generated summaries are labeled as uncited drafts; API summaries/answers must return quotes found in the actual supplied source. Exact-quote validation is not a semantic correctness guarantee.
 
-**No paid API call, large model download, or real model inference was performed during development.** Those paths need a configured model and validation on your hardware. Protocol behavior, routing, privacy gates, validation, and error handling are covered by deterministic tests.
+**No paid API call, large model download, or real pretrained-model inference was performed during development.** Those paths need a configured model and validation on your hardware. Protocol behavior, routing, privacy gates, validation, and error handling are covered by deterministic tests.
 
 ## Android and offline use
 

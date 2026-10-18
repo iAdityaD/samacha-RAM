@@ -1,0 +1,14 @@
+{$SAMACHA_DOMAIN} {
+    encode zstd gzip
+    header Strict-Transport-Security "max-age=31536000"
+    header X-Content-Type-Options "nosniff"
+    request_body {
+        max_size 4GB
+    }
+    reverse_proxy reader:8787 {
+        transport http {
+            dial_timeout 10s
+            response_header_timeout 130s
+        }
+    }
+}

@@ -1,0 +1,30 @@
+services:
+  reader:
+    build: .
+    restart: unless-stopped
+    environment:
+      SAMACHA_PASSWORD: ${SAMACHA_PASSWORD:?Set a strong workspace password}
+      SAMACHA_ALLOWED_HOSTS: ${SAMACHA_DOMAIN:?Set your HTTPS domain}
+      SAMACHA_SECURE_COOKIE: '1'
+    volumes:
+      - reader-data:/app/data
+    networks: [private]
+    mem_limit: 1g
+    cpus: 2
+  gateway:
+    image: caddy:2.10
+    restart: unless-stopped
+    environment:
+      SAMACHA_DOMAIN: ${SAMACHA_DOMAIN}
+    ports: ['80:80', '443:443']
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks: [private]
+networks:
+  private:
+volumes:
+  reader-data:
+  caddy-data:
+  caddy-config:
