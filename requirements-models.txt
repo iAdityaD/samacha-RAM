@@ -1,0 +1,7 @@
+-r requirements.txt
+# Optional: downloaded-model execution, isolated from the base reader install.
+transformers>=4.48,<5
+torch>=2.6,<3
+huggingface-hub>=0.28,<1
+safetensors>=0.5,<1
+sentencepiece>=0.2,<1
