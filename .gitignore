@@ -13,3 +13,5 @@ android/local.properties
 android/**/build/
 
 android/.kotlin/
+
+browser-artifacts/
