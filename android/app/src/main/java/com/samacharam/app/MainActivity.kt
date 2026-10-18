@@ -83,7 +83,7 @@ class MainActivity:ComponentActivity() {
                         val topics=state.optJSONObject("profile")?.optJSONObject("topics")?:JSONObject()
                         topics.keys().asSequence().toList().forEach { topic->
                             Text(topic,style=MaterialTheme.typography.titleMedium)
-                            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)){listOf("Core","Near","Adjacent","Discovery","Muted").forEach { l->TextButton(onClick={topics.put(topic,l);mutation("/api/profile",JSONObject().put("topics",topics))}){Text(if(topics.optString(topic)==l)"•$l" else l,style=MaterialTheme.typography.labelSmall)}}
+                            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.spacedBy(4.dp)){listOf("Core","Near","Adjacent","Discovery","Muted").forEach { l->TextButton(onClick={topics.put(topic,l);mutation("/api/profile",JSONObject().put("topics",topics))}){Text(if(topics.optString(topic)==l)"•$l" else l,style=MaterialTheme.typography.labelSmall)}}}
                         }
                     }
                     "Models" -> {
@@ -93,7 +93,7 @@ class MainActivity:ComponentActivity() {
                         taskNames.forEach { task->
                             var chosen by remember(task,status){mutableStateOf(routes.getString(task,"host")?:"host")}
                             var expanded by remember{mutableStateOf(false)}
-                            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Text(task);Box {TextButton(onClick={expanded=true}){Text(chosen)};DropdownMenu(expanded,{expanded=false}){(listOf("host")+bundles).forEach { name->DropdownMenuItem(text={Text(name)},onClick={routes.edit().putString(task,name).apply();chosen=name;expanded=false})}}}
+                            Row(Modifier.fillMaxWidth(),horizontalArrangement=Arrangement.SpaceBetween){Text(task);Box {TextButton(onClick={expanded=true}){Text(chosen)};DropdownMenu(expanded,{expanded=false}){(listOf("host")+bundles).forEach { name->DropdownMenuItem(text={Text(name)},onClick={routes.edit().putString(task,name).apply();chosen=name;expanded=false})}}}}
                         }
                         var bundle by remember{mutableStateOf("my-model")};var filename by remember{mutableStateOf("model.litertlm")}
                         OutlinedTextField(bundle,{bundle=it},label={Text("Bundle name")})
