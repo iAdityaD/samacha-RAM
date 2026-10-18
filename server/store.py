@@ -12,6 +12,7 @@ def now():
 
 
 DEFAULT_PROFILE = {'topics': {'LLMs': 'Core', 'NLP': 'Near', 'Hardware': 'Adjacent', 'AI audio': 'Adjacent', 'AI video': 'Discovery', 'Software': 'Near'}, 'budget': 15, 'tracking': True, 'local_only': False, 'cloud_fallback': False, 'theme': 'light', 'digest_hour': '08:00', 'timezone': 'Asia/Kolkata'}
+RECORDS = ('articles','sources','providers','missions','queries','outputs','jobs','documents','claims','reviews','relations','watches','alerts','feedback','annotations','vectors','operations','comparisons','versions')
 
 
 class Store:
@@ -41,21 +42,37 @@ class Store:
         CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, body TEXT NOT NULL);
         ''')
         self.db.commit()
+        for table in RECORDS:
+            self.db.execute(f'CREATE TABLE IF NOT EXISTS {table}(id TEXT PRIMARY KEY, body TEXT NOT NULL)')
+        self.db.execute('PRAGMA user_version=2')
+        self.db.commit()
 
     def put(self, table, id, body):
-        if table not in ('articles', 'sources', 'providers', 'missions', 'queries', 'outputs', 'jobs'):
+        if table not in RECORDS:
             raise ValueError('Invalid record type')
         with self.lock, self.db:
+            if table=='articles':
+                old=self.db.execute('SELECT body FROM articles WHERE id=?',(id,)).fetchone()
+                if old:
+                    previous=json.loads(old['body'])
+                    if previous.get('version')!=body.get('version'):
+                        self.db.execute('INSERT OR IGNORE INTO versions VALUES (?,?)',(id+':'+previous['version'],json.dumps(previous)))
+                        for derived in ('outputs','vectors'):
+                            self.db.execute(f"DELETE FROM {derived} WHERE json_extract(body,'$.article_id')=?",(id,))
+                        for review in self.items('reviews'):
+                            if any(x.get('article_id')==id for x in review.get('evidence',[])):
+                                review['stale']=True
+                                self.db.execute('UPDATE reviews SET body=? WHERE id=?',(json.dumps(review),review['id']))
             self.db.execute(f'INSERT OR REPLACE INTO {table}(id,body) VALUES (?,?)', (id, json.dumps(body)))
 
     def items(self, table):
-        if table not in ('articles', 'sources', 'providers', 'missions', 'queries', 'outputs', 'jobs'):
+        if table not in RECORDS:
             raise ValueError('Invalid record type')
         with self.lock:
             return [json.loads(x['body']) for x in self.db.execute(f'SELECT body FROM {table}')]
 
     def delete(self, table, id):
-        if table not in ('providers', 'missions', 'queries', 'saved', 'sources', 'jobs'):
+        if table not in RECORDS+('saved',):
             raise ValueError('Invalid record type')
         with self.lock, self.db:
             self.db.execute(f'DELETE FROM {table} WHERE id=?', (id,))
@@ -100,6 +117,7 @@ class Store:
         with self.lock, self.db:
             self.db.execute('DELETE FROM history')
             self.db.execute('DELETE FROM outputs')
+            self.db.execute('DELETE FROM feedback')
             self.db.execute("DELETE FROM settings WHERE id='behavior'")
 
     def encrypt(self, key):

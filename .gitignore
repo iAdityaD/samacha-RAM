@@ -7,3 +7,7 @@ models/
 node_modules/
 *.sqlite*
 .DS_Store
+
+android/.gradle/
+android/local.properties
+android/**/build/

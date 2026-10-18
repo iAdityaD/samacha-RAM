@@ -21,6 +21,7 @@ from .feeds import canonical, refresh, seed
 from .models import Router, ModelError, TASKS
 from .network import NetworkError, resolve
 from .store import Store, now
+from .workspace import Workspace, bibliography
 
 WEB=Path(__file__).resolve().parent.parent/'web'
 
@@ -30,13 +31,16 @@ class App:
         self.store=Store(root); seed(self.store); self.router=Router(self.store)
         self.password=password; self.sessions={}; self.session_lock=threading.Lock()
         self.pool=ThreadPoolExecutor(max_workers=2); self.refresh_lock=threading.Lock(); self.upload_lock=threading.Lock(); self.stopped=threading.Event()
+        self.workspace=Workspace(self)
+        self.mutation_lock=threading.RLock()
+        self.login_failures=[]
         # A killed process cannot leave jobs falsely "running" forever.
         for job in self.store.items('jobs'):
             if job.get('status') in ('queued','running','downloading'):
                 self.store.put('jobs',job['id'],{**job,'status':'interrupted','error':'The app host stopped before this job finished. Start a new request.'})
 
     def state(self):
-        return {'articles':self.store.items('articles'),'sources':self.store.items('sources'),'profile':self.store.profile(),'saved':self.store.saved(),'history':self.store.history(),'missions':self.store.items('missions'),'queries':self.store.items('queries'),'models':self.router.public_providers(),'routes':self.store.setting('routes',{}),'jobs':self.store.items('jobs')[-20:],'digest':self.store.setting('digest'),'features':{'transformers_installed':__import__('importlib.util',fromlist=['find_spec']).find_spec('transformers') is not None,'host_local_inference':True,'on_phone_inference':False},'schedule':self.store.setting('schedule',{'enabled':False}),'last_refresh':self.store.setting('last_refresh')}
+        return {'articles':self.store.items('articles'),'sources':self.store.items('sources'),'profile':self.store.profile(),'saved':self.store.saved(),'history':self.store.history(),'missions':self.store.items('missions'),'queries':self.store.items('queries'),'models':self.router.public_providers(),'routes':self.store.setting('routes',{}),'jobs':self.store.items('jobs')[-20:],'digest':self.store.setting('digest'),'features':{'transformers_installed':__import__('importlib.util',fromlist=['find_spec']).find_spec('transformers') is not None,'host_local_inference':True,'on_phone_inference':False},'schedule':self.store.setting('schedule',{'enabled':False}),'last_refresh':self.store.setting('last_refresh'),**self.workspace.snapshot()}
 
     def start_refresh(self):
         if not self.refresh_lock.acquire(blocking=False): raise ValueError('A source refresh is already running.')
@@ -45,6 +49,7 @@ class App:
         def work():
             try:
                 sources=refresh(self.store)
+                self.workspace.scan_watches()
                 route=self.store.setting('routes',{}).get('classification',{}).get('primary','builtin')
                 if route!='builtin':
                     # A strict batch bound prevents an expensive whole-library inference sweep.
@@ -103,7 +108,25 @@ class App:
                 continue
 
     def mutation(self,path,b):
+        operation=b.get('operation_id')
+        if operation:
+            with self.mutation_lock:
+                if not isinstance(operation,str) or len(operation)>100:raise ValueError('Invalid operation identifier.')
+                fingerprint=hashlib.sha256(json.dumps({'path':path,'body':b},sort_keys=True).encode()).hexdigest()
+                old=next((x for x in self.store.items('operations') if x['id']==operation),None)
+                if old:
+                    if old['fingerprint']!=fingerprint:raise ValueError('Operation ID already belongs to another edit.')
+                    return old['result']
+                if path not in ('/api/save','/api/history','/api/profile'):raise ValueError('This operation is not eligible for offline replay.')
+                result=self._mutation(path,{k:v for k,v in b.items() if k!='operation_id'})
+                self.store.put('operations',operation,{'id':operation,'fingerprint':fingerprint,'result':result,'created':now()})
+                return result
+        return self._mutation(path,b)
+
+    def _mutation(self,path,b):
         s=self.store
+        extension=self.workspace.mutate(path,b)
+        if extension is not None:return extension
         if path=='/api/profile':
             old=s.profile(); allowed={'topics','budget','tracking','local_only','cloud_fallback','theme','digest_hour','timezone'}
             if not isinstance(b,dict) or not set(b)<=allowed: raise ValueError('Unknown preference.')
@@ -118,6 +141,9 @@ class App:
             except Exception: raise ValueError('Invalid IANA timezone.')
             s.set_setting('profile',p); return p
         if path=='/api/save':
+            if 'base_note' in b:
+                current=next((x.get('note','') for x in s.saved() if x['id']==b['id']), '')
+                if current!=b['base_note']:raise ValueError('Note conflict: the host note changed. Export or reconcile the queued note before retrying.')
             self.article(b['id']); s.save(b['id'],bool(b.get('active',True)),b.get('note')); return {'saved':s.saved()}
         if path=='/api/history':
             self.article(b['id']); s.event(b['id'],b['kind']); return {'history':s.history()}
@@ -179,9 +205,15 @@ class App:
         if path=='/api/models/download': return self.router.download(b.get('repo',''),b.get('revision',''),b.get('license_ack',False))
         if path=='/api/run':
             if b.get('article_id'):
-                a=self.article(b['article_id']); text=a['title']+'\n'+a['excerpt']
+                a=self.article(b['article_id']); text=self.workspace.source(a)
             else: text=str(b.get('text',''))
-            result=self.router.run(b.get('task'),text,str(b.get('question','')),b.get('provider_id'))
+            if len(text)>24000:
+                if b.get('task')!='summarization':raise ValueError('Choose a source passage under 24,000 characters for this task.')
+                chunks=[text[i:i+16000] for i in range(0,min(len(text),160000),16000)]
+                partial=[self.router.run('summarization',x) for x in chunks]
+                result=partial[0];result['chunks']=len(partial);result['truncated']=len(text)>160000
+                result['result']={'sentences':[s for p in partial for s in p['result'].get('sentences',[])], 'drafts':[p['result']['generated_text'] for p in partial if p['result'].get('generated_text')], 'notice':'Chunk summaries; global synthesis and semantic support require review.'}
+            else:result=self.router.run(b.get('task'),text,str(b.get('question','')),b.get('provider_id'))
             if b.get('article_id'):
                 result.update(article_id=a['id'],article_version=a['version'],access=a['access'])
                 if s.profile()['tracking']:
@@ -230,6 +262,16 @@ class App:
                     if not self.sid(): self.json(401,{'error':'Sign in to this app host.'}); return
                     if path=='/api/state': self.json(200,app.state())
                     elif path=='/api/bundles': self.json(200,{'bundles':app.router.bundles()})
+                    elif path.startswith('/api/document/'):
+                        id=path.rsplit('/',1)[-1];doc=app.workspace.get('documents',id)
+                        if 'download=1' in self.path and doc['format']=='pdf':
+                            file=app.store.root/'documents'/(doc['id']+'.pdf')
+                            self.send_response(200);self.send_header('Content-Type','application/pdf');self.send_header('Content-Disposition','attachment; filename="paper-'+id[:12]+'.pdf"');self.security();self.end_headers();self.wfile.write(file.read_bytes())
+                        else:self.json(200,doc)
+                    elif path in ('/api/bibtex','/api/ris'):
+                        ids={x['id'] for x in app.store.saved()};rows=[a for a in app.store.items('articles') if a['id'] in ids]
+                        data=bibliography(rows,'bibtex' if path.endswith('bibtex') else 'ris').encode()
+                        self.send_response(200);self.send_header('Content-Type','text/plain; charset=utf-8');self.send_header('Content-Disposition','attachment; filename="samacha.'+('bib' if path.endswith('bibtex') else 'ris')+'"');self.security();self.end_headers();self.wfile.write(data)
                     elif path=='/api/export':
                         state=app.state(); state.pop('models',None)
                         self.json(200,state,{'Content-Disposition':'attachment; filename="samacha-library.json"'})
@@ -260,7 +302,12 @@ class App:
                     if not isinstance(b,dict): raise ValueError('Expected a JSON object.')
                     path=urlsplit(self.path).path
                     if path=='/api/login':
+                        with app.session_lock:
+                            app.login_failures=[t for t in app.login_failures if t>time.time()-60]
+                            blocked=len(app.login_failures)>=10
+                        if blocked:self.json(429,{'error':'Too many failed sign-in attempts. Wait one minute.'});return
                         if app.password and not hmac.compare_digest(str(b.get('password','')),app.password):
+                            with app.session_lock:app.login_failures.append(time.time())
                             time.sleep(0.5); self.json(401,{'error':'Incorrect app password.'}); return
                         self.new_session(); return
                     if not self.sid(): self.json(401,{'error':'Sign in to this app host.'}); return
