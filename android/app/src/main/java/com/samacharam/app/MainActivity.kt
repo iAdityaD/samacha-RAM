@@ -41,6 +41,7 @@ class MainActivity:ComponentActivity() {
     @Composable fun Workspace() {
         var state by remember { mutableStateOf(offline.cached()) };var tab by remember { mutableStateOf("Today") }
         var status by remember { mutableStateOf("Cached workspace. Connect in Settings to synchronize.") };var busy by remember { mutableStateOf(false) }
+        val shared=if(intent.action==Intent.ACTION_SEND)intent.getStringExtra(Intent.EXTRA_TEXT) else null
         var selected by remember { mutableStateOf<JSONObject?>(null) };var note by remember { mutableStateOf("") }
         var output by remember { mutableStateOf("") };var question by remember { mutableStateOf("") };var query by remember { mutableStateOf("") }
         val routes=getSharedPreferences("routes",MODE_PRIVATE)
@@ -67,6 +68,8 @@ class MainActivity:ComponentActivity() {
                 when(tab) {
                     "Today","Library" -> {
                         Text(if(tab=="Today")"Follow your curiosity." else "Keep the good things.",style=MaterialTheme.typography.headlineMedium)
+                        if(!shared.isNullOrBlank())Button(onClick={mutation("/api/clip",JSONObject().put("url",shared.trim()).put("title",intent.getStringExtra(Intent.EXTRA_SUBJECT)?:""))}){Text("Save shared URL to library")}
+                        if(tab=="Today")TextButton(onClick={mutation("/api/refresh",JSONObject())}){Text("Refresh source feeds (sync again after processing)")}
                         OutlinedTextField(query,{query=it},label={Text("Search your collection")},modifier=Modifier.fillMaxWidth())
                         val saves=state.optJSONArray("saved")?.objects()?.map{it.optString("id")}?:emptyList()
                         val topics=state.optJSONObject("profile")?.optJSONObject("topics")
@@ -121,6 +124,7 @@ class MainActivity:ComponentActivity() {
                         OutlinedTextField(password,{password=it},label={Text("Host password")},visualTransformation=PasswordVisualTransformation())
                         Row {Checkbox(rememberLogin,{rememberLogin=it});Text("Remember encrypted login for background briefing")}
                         Button(onClick={job{api.configure(host);api.login(password);SecureStore(this@MainActivity).put("remembered-password",if(rememberLogin)password else "");val value=api.request("/api/state");offline.cache(value);withContextOnMain{state=value};"Connected. Host model routes and saved records are synchronized."}},enabled=!busy){Text("Connect")}
+                        TextButton(onClick={startActivity(Intent(Intent.ACTION_VIEW,Uri.parse(api.base)))}){Text("Open full evidence workspace in browser")}
                         Text("Release builds require HTTPS. Debug emulator uses 10.0.2.2; allow it in SAMACHA_ALLOWED_HOSTS. Queued edits: ${offline.count()}.")
                         Button(onClick={if(Build.VERSION.SDK_INT>=33)permission.launch(Manifest.permission.POST_NOTIFICATIONS);val constraints=Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build();WorkManager.getInstance(this@MainActivity).enqueueUniquePeriodicWork("daily-briefing",ExistingPeriodicWorkPolicy.UPDATE,PeriodicWorkRequestBuilder<BriefingWorker>(1,TimeUnit.DAYS).setConstraints(constraints).build());status="Daily background briefing requested. Android may delay work; host access is required."}){Text("Enable daily briefing notification")}
                         TextButton(onClick={WorkManager.getInstance(this@MainActivity).cancelUniqueWork("daily-briefing");status="Background briefing disabled."}){Text("Disable background briefing")}
@@ -128,7 +132,7 @@ class MainActivity:ComponentActivity() {
                 }
             }
         }
-        selected?.let { a->AlertDialog(onDismissRequest={selected=null},title={Text(a.optString("title"))},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)){Text(a.optString("excerpt"));Text("${a.optString("publication")} · Not assessed");OutlinedTextField(note,{note=it},label={Text("Private note")});TextButton(onClick={mutation("/api/save",JSONObject().put("id",a.getString("id")).put("active",true).put("note",note))}){Text("Save article & note")};TextButton(onClick={runTask("summarization",a.optString("excerpt"))}){Text("Summarize with chosen route")};if(output.isNotBlank())Text(output)}},confirmButton={TextButton(onClick={val u=Uri.parse(a.optString("url"));if(u.scheme in listOf("https","http"))startActivity(Intent(Intent.ACTION_VIEW,u))}){Text("Original")}},dismissButton={TextButton(onClick={selected=null}){Text("Close")}}) }
+        selected?.let { a->AlertDialog(onDismissRequest={selected=null},title={Text(a.optString("title"))},text={Column(Modifier.verticalScroll(rememberScrollState()),verticalArrangement=Arrangement.spacedBy(10.dp)){Text(a.optString("excerpt"));Text("${a.optString("publication")} · Not assessed");OutlinedTextField(note,{note=it},label={Text("Private note")});TextButton(onClick={mutation("/api/save",JSONObject().put("id",a.getString("id")).put("active",true).put("base_note",state.optJSONArray("saved")?.objects()?.find{it.optString("id")==a.optString("id")}?.optString("note")?:"").put("note",note))}){Text("Save article & note")};TextButton(onClick={runTask("summarization",a.optString("excerpt"))}){Text("Summarize with chosen route")};if(output.isNotBlank())Text(output)}},confirmButton={TextButton(onClick={val u=Uri.parse(a.optString("url"));if(u.scheme in listOf("https","http"))startActivity(Intent(Intent.ACTION_VIEW,u))}){Text("Original")}},dismissButton={TextButton(onClick={selected=null}){Text("Close")}}) }
     }
     private fun withContextOnMain(block:()->Unit) { runOnUiThread(block) }
 }

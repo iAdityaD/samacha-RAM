@@ -5,7 +5,6 @@ android {
     defaultConfig { applicationId = "com.samacharam.app"; minSdk = 26; targetSdk = 35; versionCode = 2; versionName = "0.2.0" }
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
-    kotlinOptions { jvmTarget = "17" }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
 }
 dependencies {
@@ -20,3 +19,5 @@ dependencies {
     implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.0")
     testImplementation("junit:junit:4.13.2")
 }
+
+kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }

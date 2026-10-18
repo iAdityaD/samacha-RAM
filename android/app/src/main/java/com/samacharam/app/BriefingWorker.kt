@@ -15,8 +15,15 @@ class BriefingWorker(context:Context,parameters:WorkerParameters):Worker(context
         return try {
             val api=ApiClient(applicationContext);val vault=SecureStore(applicationContext)
             val pass=vault.get("remembered-password")
-            if(pass!=null)api.login(pass)
-            val state=api.request("/api/state");OfflineStore(applicationContext).use { it.cache(state) }
+            if(!pass.isNullOrBlank())api.login(pass)
+            val refresh=api.request("/api/refresh",JSONObject())
+            var state=api.request("/api/state")
+            for(attempt in 0 until 24) {
+                val job=state.optJSONArray("jobs")?.objects()?.find{it.optString("id")==refresh.optString("id")}
+                if(job?.optString("status") !in listOf("queued","running"))break
+                Thread.sleep(5000);state=api.request("/api/state")
+            }
+            OfflineStore(applicationContext).use { it.cache(state) }
             val digest=api.request("/api/digest",JSONObject())
             val manager=applicationContext.getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(NotificationChannel("briefing","Daily briefing",NotificationManager.IMPORTANCE_DEFAULT))
