@@ -15,6 +15,9 @@ import com.samacharam.core.isNearDuplicate
 import com.samacharam.core.simHash
 import com.samacharam.core.titleTokens
 import com.samacharam.core.urlHash
+import com.samacharam.core.ai.AiSettings
+import com.samacharam.core.ai.AiSettingsCodec
+import com.samacharam.core.ai.UsageCounter
 
 sealed class UpsertResult {
     data class Inserted(val id: Long) : UpsertResult()
@@ -75,6 +78,23 @@ class Library(private val db: SqlDriver) {
     var budgetMinutes: Int
         get() = meta("budget")?.toIntOrNull() ?: 15
         set(value) { require(value in 1..120) { "Reading budget must be 1–120 minutes." }; setMeta("budget", value.toString()) }
+
+    // ---- model connections (no secrets here; keys live in the device SecretStore) ----
+
+    fun aiSettings(): AiSettings = meta("ai.settings")?.let(AiSettingsCodec::decode) ?: AiSettings()
+
+    fun saveAiSettings(settings: AiSettings) = setMeta("ai.settings", AiSettingsCodec.encode(settings))
+
+    /** Daily cloud request counter stored with the library, so restarts cannot reset the budget. */
+    val cloudUsage: UsageCounter = object : UsageCounter {
+        override fun tryConsume(day: String, limit: Int): Boolean = db.transaction {
+            val stored = meta("ai.usage")?.split('|')
+            val used = if (stored?.getOrNull(0) == day) stored.getOrNull(1)?.toIntOrNull() ?: 0 else 0
+            if (used >= limit) return@transaction false
+            setMeta("ai.usage", "$day|${used + 1}")
+            true
+        }
+    }
 
     // ---- topics ----
 

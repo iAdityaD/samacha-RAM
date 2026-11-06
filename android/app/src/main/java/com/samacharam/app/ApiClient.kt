@@ -16,6 +16,8 @@ class ApiClient(context: Context) {
     }
     @Synchronized fun request(path: String, body: JSONObject? = null): JSONObject {
         require(path.startsWith("/api/"))
+        // The manifest permits cleartext for LAN model servers, so the HTTPS rule for the host is enforced here.
+        require(BuildConfig.DEBUG || base.startsWith("https://")) { "Release builds require an HTTPS host." }
         val c = URI(base + path).toURL().openConnection() as HttpURLConnection
         c.connectTimeout = 15000; c.readTimeout = 120000; c.instanceFollowRedirects = false
         c.setRequestProperty("X-Samacha", "1")

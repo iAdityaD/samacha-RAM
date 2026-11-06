@@ -66,6 +66,16 @@ class DeviceModels(private val context: Context) {
         }
     }
     private fun bert(dir: File,task: String,text: String): String {
+        if(task=="classification") {
+            val scores=labelScores(dir,text);val best=scores.maxBy { it.value }
+            return JSONObject().put("label",best.key).put("notice","Fine-tuned classifier label; not factual certainty").toString(2)
+        }
+        val vector=embedding(dir,text)
+        return JSONObject().put("dimensions",vector.size).put("vector",org.json.JSONArray(vector.toList())).toString(2)
+    }
+
+    /** Runs a BERT ONNX bundle and hands its first output to [read]. */
+    private fun <T> bertOutput(dir: File,text: String,read: (Any) -> T): T {
         val config=JSONObject(File(dir,"config.json").readText())
         require(config.optString("model_type")=="bert" && config.has("do_lower_case") && config.optBoolean("do_lower_case")) { "Only uncased BERT WordPiece bundles are supported; explicitly set do_lower_case=true after checking the tokenizer" }
         val vocab=File(dir,"vocab.txt").readLines().mapIndexed { i,t -> t to i }.toMap()
@@ -76,22 +86,40 @@ class DeviceModels(private val context: Context) {
                 val inputs=mutableMapOf<String,OnnxTensor>()
                 try {
                     for(name in session.inputNames) inputs[name]=OnnxTensor.createTensor(env,arrayOf(when(name){"input_ids"->ids;"attention_mask"->LongArray(ids.size){1};"token_type_ids"->LongArray(ids.size);else->error("Unsupported ONNX input: $name")}))
-                    session.run(inputs).use { result ->
-                        @Suppress("UNCHECKED_CAST")
-                        if(task=="classification") {
-                            val logits=(result[0].value as Array<FloatArray>)[0]
-                            val labels=config.getJSONObject("id2label");val best=logits.indices.maxBy { logits[it] }
-                            return JSONObject().put("label",labels.getString(best.toString())).put("notice","Fine-tuned classifier label; not factual certainty").toString(2)
-                        } else {
-                            val raw=result[0].value
-                            val vector=if(raw is Array<*> && raw.firstOrNull() is FloatArray) (raw[0] as FloatArray) else {
-                                val hidden=(raw as Array<Array<FloatArray>>)[0];FloatArray(hidden[0].size){d->hidden.map{it[d]}.average().toFloat()}
-                            }
-                            return JSONObject().put("dimensions",vector.size).put("vector",org.json.JSONArray(vector.toList())).toString(2)
-                        }
-                    }
+                    session.run(inputs).use { result -> return read(result[0].value) }
                 } finally { inputs.values.forEach { it.close() } }
             }
+        }
+    }
+
+    /** Softmax probabilities per id2label name for a fine-tuned classifier bundle. */
+    fun labelScores(dir: File,text: String): Map<String,Float> {
+        val labels=JSONObject(File(dir,"config.json").readText()).getJSONObject("id2label")
+        @Suppress("UNCHECKED_CAST")
+        val logits=bertOutput(dir,text) { (it as Array<FloatArray>)[0] }
+        val max=logits.max();val exp=logits.map { kotlin.math.exp((it-max).toDouble()) };val sum=exp.sum()
+        return logits.indices.associate { labels.getString(it.toString()) to (exp[it]/sum).toFloat() }
+    }
+
+    /** Pooled vector, or the mean of token vectors when the model returns a sequence. */
+    fun embedding(dir: File,text: String): FloatArray = bertOutput(dir,text) { raw ->
+        @Suppress("UNCHECKED_CAST")
+        if(raw is Array<*> && raw.firstOrNull() is FloatArray) (raw[0] as FloatArray) else {
+            val hidden=(raw as Array<Array<FloatArray>>)[0];FloatArray(hidden[0].size){d->hidden.map{it[d]}.average().toFloat()}
+        }
+    }
+
+    fun bundleDir(bundle: String): File { require(bundle in names()) { "Model bundle not found" }; return File(root,bundle) }
+
+    /** Raw LiteRT-LM generation for the model router, which supplies its own guarded prompt and validates the reply. */
+    @Synchronized fun generate(bundle: String, prompt: String): String {
+        val model=File(bundleDir(bundle),"model.litertlm");require(model.isFile) { "Import model.litertlm for local text generation" }
+        val memory=android.app.ActivityManager.MemoryInfo()
+        (context.getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager).getMemoryInfo(memory)
+        require(model.length()*1.5<memory.availMem) { "Insufficient available device memory for this bundle. Choose a smaller compatible model." }
+        Engine(EngineConfig(modelPath=model.absolutePath,backend=Backend.CPU())).use { engine ->
+            engine.initialize()
+            engine.createConversation().use { conversation -> return conversation.sendMessage(prompt).toString() }
         }
     }
 }

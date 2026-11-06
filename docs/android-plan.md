@@ -126,6 +126,31 @@ Defects found by these tests and fixed before commit:
 - `PRAGMA incremental_vacuum` frees pages only as it is stepped; some drivers step it once. Without the bounded loop in `Library.compact()`, retention left the file larger (16.6 MB) instead of smaller.
 - Retention trimmed excerpts of items it was about to delete.
 
+## Model connections
+
+No model is built in or required. Ranking, dedup, search, watchlists, and retention are rules. Each AI task (classification, summarization, embeddings, reranking, evidence drafts, Q&A) has its own route: a primary and an optional fallback, chosen from:
+
+| Connection | Protocol | Where text goes |
+|---|---|---|
+| Built-in rules (default) | — | Nowhere. Classification, extractive summary, matching-passage Q&A. Embeddings, reranking, and evidence fail rather than fake output |
+| On-device | LiteRT-LM (`.litertlm`), ONNX BERT | Stays on the phone |
+| Local network | Ollama, OpenAI-compatible (llama.cpp, LM Studio) | A computer on the owner's network |
+| Cloud | OpenAI-compatible, Anthropic Messages API, Google Gemini | The provider, with the owner's key |
+
+Location is derived from the endpoint, never asserted: private and loopback literals, `.local`/`.lan`/`.home.arpa`, single-label names, and 100.64.0.0/10 (Tailscale) are local network; everything else is cloud. On Android, `OkHttpTransport` resolves each host once, checks every address against the expected location, and connects only to those addresses (no DNS rebinding). It follows no redirects and caps responses at 8 MB.
+
+Rules enforced in `core/ai`, before any key is read or request built:
+- Cloud endpoints need HTTPS and explicit per-provider consent to receive source text.
+- Local-only mode blocks all cloud providers. A cloud fallback needs a second, separate opt-in.
+- A daily cloud request limit (default 100) is counted before sending and persisted in the library.
+- Keys live only in the Android Keystore vault; they are not in settings JSON, sync, exports, or error messages (provider errors are redacted).
+- Replies must be JSON of the task's shape. Cited outputs must quote passages that exist in the source (whitespace-insensitive); classification labels must be the owner's own topics. Anything else fails and the fallback runs.
+- Opt-in assisted ranking: a reranking model may reorder briefing items only within their interest layer, never surfaces muted items, and failures keep the rule-based order.
+
+Anthropic adapter: raw HTTP to `/v1/messages` with `anthropic-version: 2026-10-21` (this version rejects `temperature`, so none is sent), `output_config.effort` low for classification/reranking and medium otherwise, only `text` content blocks are read, and `refusal`/`max_tokens` stop reasons are errors. For Claude models that support it, server-side refusal fallback is enabled (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`). Anthropic has no embeddings endpoint. The adapter is hand-written HTTP rather than the Java SDK because `core` is platform-neutral (for a later iOS client) and provider-neutral.
+
+The settings screens (add model, test connection, assign routes, privacy switches) arrive with Phase 3, when the Android app has its own library database.
+
 ## Remaining limits
 
 | Limit | Handling |

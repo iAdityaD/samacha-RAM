@@ -32,7 +32,7 @@ class JdbcDriver(val file: File) : SqlDriver, AutoCloseable {
 
     override fun execute(sql: String, args: List<Any?>) {
         prepare(sql, args).use { statement ->
-            if (statement.execute()) statement.resultSet.use { rs -> while (rs.next()) Unit }
+            if (statement.execute()) statement.resultSet.use { rs -> while (rs.next()) { } }
         }
     }
 
