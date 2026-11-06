@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m pip install -r requirements.txt)",
+      "Bash(python -m unittest:*)",
+      "Bash(python -m compileall:*)",
+      "Bash(npm test:*)",
+      "Bash(npm run check:*)"
+    ]
+  }
+}
