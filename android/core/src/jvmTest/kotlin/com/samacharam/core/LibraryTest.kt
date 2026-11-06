@@ -27,7 +27,7 @@ class LibraryTest {
     @Test fun schemaUsesIncrementalVacuumAndForeignKeys() {
         assertEquals(2L, driver.queryLong("PRAGMA auto_vacuum"))
         assertEquals(1L, driver.queryLong("PRAGMA foreign_keys"))
-        assertEquals("1", library.meta("schema_version"))
+        assertEquals("2", library.meta("schema_version"))
     }
 
     @Test fun reopeningKeepsData() {

@@ -122,6 +122,21 @@ class MainActivity:ComponentActivity() {
                     }
                     "Settings" -> {
                         var host by remember{mutableStateOf(api.base)};var password by remember{mutableStateOf("")};var rememberLogin by remember{mutableStateOf(false)}
+                        // Phase 2 preview: the phone keeps its own library and refreshes feeds without a computer.
+                        Text("Phone library",style=MaterialTheme.typography.headlineMedium)
+                        var phoneSources by remember(status){mutableStateOf(emptyList<com.samacharam.core.db.SourceState>())}
+                        var phoneCount by remember(status){mutableStateOf(-1)}
+                        LaunchedEffect(status){withContext(Dispatchers.IO){val library=PhoneLibrary.get(this@MainActivity);val sources=library.sources();val count=library.stats().articles.toInt();withContextOnMain{phoneSources=sources;phoneCount=count}}}
+                        Text(if(phoneCount<0)"Opening the phone library…" else "$phoneCount items stored on this phone. Refresh needs only an internet connection.")
+                        Row(horizontalArrangement=Arrangement.spacedBy(8.dp)){
+                            Button(onClick={job{PhoneLibrary.summary(PhoneLibrary.refresher(this@MainActivity).refresh(force=true))}},enabled=!busy){Text("Refresh on this phone")}
+                            TextButton(onClick={PhoneLibrary.enableBackgroundRefresh(this@MainActivity);status="Hourly phone refresh enabled. Android decides the exact time."}){Text("Refresh hourly")}
+                            TextButton(onClick={PhoneLibrary.disableBackgroundRefresh(this@MainActivity);status="Hourly phone refresh disabled."}){Text("Stop")}
+                        }
+                        phoneSources.forEach { s ->
+                            Text("${if(s.enabled)"•" else "○"} ${s.name}: "+when{!s.enabled->"off";s.lastError!=null->"unavailable (${s.lastError}); earlier items kept";s.lastSuccess!=null->"${s.itemCount} items in last fetch";else->"not checked yet"},style=MaterialTheme.typography.bodySmall)
+                        }
+                        HorizontalDivider()
                         Text("Connect your workspace.",style=MaterialTheme.typography.headlineMedium)
                         OutlinedTextField(host,{host=it},label={Text("App host URL")},modifier=Modifier.fillMaxWidth())
                         OutlinedTextField(password,{password=it},label={Text("Host password")},visualTransformation=PasswordVisualTransformation())

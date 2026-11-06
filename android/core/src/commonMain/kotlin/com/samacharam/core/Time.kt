@@ -49,3 +49,36 @@ fun formatDate(epochMs: Long): String {
     val year = yoe + era * 400 + if (month <= 2) 1 else 0
     return "${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}"
 }
+
+private val RFC822 = Regex(
+    "^(?:[A-Za-z]{3},?\\s+)?(\\d{1,2})\\s+([A-Za-z]{3})[a-z]*\\.?\\s+(\\d{2,4})\\s+(\\d{1,2}):(\\d{2})(?::(\\d{2}))?\\s*([+-]\\d{4}|[A-Za-z]{1,5})?$"
+)
+private val MONTHS = listOf("jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec")
+private val ZONES = mapOf(
+    "gmt" to 0, "ut" to 0, "utc" to 0, "z" to 0,
+    "est" to -300, "edt" to -240, "cst" to -360, "cdt" to -300, "mst" to -420, "mdt" to -360, "pst" to -480, "pdt" to -420,
+    "ist" to 330, "cet" to 60, "cest" to 120, "bst" to 60, "jst" to 540, "aest" to 600,
+)
+
+/** RSS dates (RFC 822 / RFC 2822), e.g. "Wed, 02 Oct 2002 13:00:00 GMT". Returns epoch ms or null. Unknown zones are not guessed. */
+fun parseRfc822(value: String?): Long? {
+    if (value.isNullOrBlank()) return null
+    val m = RFC822.matchEntire(value.trim()) ?: return null
+    val g = m.groupValues
+    val month = MONTHS.indexOf(g[2].lowercase()) + 1
+    if (month == 0) return null
+    var year = g[3].toInt()
+    if (g[3].length == 2) year += if (year < 50) 2000 else 1900
+    val day = g[1].toInt(); val hours = g[4].toInt(); val minutes = g[5].toInt(); val seconds = g[6].ifEmpty { "0" }.toInt()
+    if (day !in 1..31 || hours > 23 || minutes > 59 || seconds > 60) return null
+    val zone = g[7]
+    val offset = when {
+        zone.isEmpty() -> 0
+        zone[0] == '+' || zone[0] == '-' -> (zone.substring(1, 3).toInt() * 60 + zone.substring(3, 5).toInt()) * if (zone[0] == '-') -1 else 1
+        else -> ZONES[zone.lowercase()] ?: return null
+    }
+    return daysFromCivil(year, month, day) * DAY_MS + ((hours * 60L + minutes - offset) * 60 + seconds) * 1000
+}
+
+/** Feed dates in any common format: ISO 8601 (Atom, JSON Feed) or RFC 822 (RSS). */
+fun parseFeedDate(value: String?): Long? = parseIsoInstant(value) ?: parseRfc822(value)

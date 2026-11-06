@@ -51,11 +51,10 @@ class Library(private val db: SqlDriver) {
                 Schema.v1.forEach { db.execute(it) }
                 setMeta("schema_version", Schema.VERSION.toString())
             }
-            return
         }
         var version = meta("schema_version")?.toInt() ?: throw IllegalStateException("Unrecognized database.")
-        require(version <= Schema.VERSION + Schema.migrations.size) { "Database was created by a newer app version." }
-        while (version < Schema.VERSION + Schema.migrations.size) {
+        require(version <= Schema.LATEST) { "Database was created by a newer app version." }
+        while (version < Schema.LATEST) {
             val steps = Schema.migrations[version - Schema.VERSION]
             db.transaction {
                 steps.forEach { db.execute(it) }
@@ -130,6 +129,53 @@ class Library(private val db: SqlDriver) {
         return db.queryLong("SELECT id FROM source WHERE key=?", listOf(key))
     }
 
+    fun sources(): List<SourceState> = db.query(
+        """SELECT s.id, s.key, s.name, s.url, s.type, COALESCE(t.name,''), s.enabled, s.etag, s.last_modified, s.failures,
+                  s.next_check, s.last_success, s.last_checked, s.last_error, s.interval_minutes, s.item_count
+           FROM source s LEFT JOIN topic t ON t.id=s.topic_id ORDER BY s.name""",
+    ) {
+        SourceState(
+            id = it.long(0)!!, key = it.string(1)!!, name = it.string(2)!!, url = it.string(3)!!, type = ContentType.fromCode(it.long(4)!!.toInt()),
+            topic = it.string(5)!!, enabled = it.long(6) == 1L, etag = it.string(7), lastModified = it.string(8), failures = it.long(9)!!.toInt(),
+            nextCheck = it.long(10), lastSuccess = it.long(11), lastChecked = it.long(12), lastError = it.string(13),
+            intervalMinutes = it.long(14)!!.toInt(), itemCount = it.long(15)!!.toInt(),
+        )
+    }
+
+    fun setSourceEnabled(key: String, enabled: Boolean) =
+        db.execute("UPDATE source SET enabled=?, next_check=NULL WHERE key=?", listOf(enabled, key))
+
+    /** Stores the outcome of one fetch attempt. Existing articles are never removed by a failed fetch. */
+    fun recordFetch(id: Long, outcome: FetchOutcome) = db.execute(
+        """UPDATE source SET last_checked=?, next_check=?, failures=?, last_error=?,
+               etag=COALESCE(?, etag), last_modified=COALESCE(?, last_modified),
+               last_success=CASE WHEN ? THEN ? ELSE last_success END,
+               item_count=CASE WHEN ? >= 0 THEN ? ELSE item_count END
+           WHERE id=?""",
+        listOf(
+            outcome.checkedAt, outcome.nextCheck, outcome.failures, outcome.error, outcome.etag, outcome.lastModified,
+            outcome.success, outcome.checkedAt, outcome.itemCount, outcome.itemCount, id,
+        ),
+    )
+
+    /** Follows a permanent redirect. Ignored when another subscription already uses the new URL. */
+    fun moveSource(id: Long, newUrl: String): Boolean {
+        val canonical = canonicalUrl(newUrl)
+        if (db.queryLong("SELECT count(*) FROM source WHERE url=? AND id<>?", listOf(canonical, id)) > 0) return false
+        db.execute("UPDATE source SET url=?, etag=NULL, last_modified=NULL WHERE id=?", listOf(canonical, id))
+        return true
+    }
+
+    /** First-run defaults: a small set of public research feeds and the default interest layers. No sample articles. */
+    fun seedDefaults() = db.transaction {
+        if (db.queryLong("SELECT count(*) FROM topic") == 0L) {
+            DEFAULT_LAYERS.forEach { (topic, layer) -> setLayer(topic, layer) }
+        }
+        if (db.queryLong("SELECT count(*) FROM source") == 0L) {
+            DEFAULT_SOURCES.forEach { s -> upsertSource(s.key, s.name, s.url, s.type, s.topic) }
+        }
+    }
+
     // ---- articles ----
 
     fun upsertArticle(
@@ -194,6 +240,9 @@ class Library(private val db: SqlDriver) {
     }
 
     private fun encodeOrNull(text: String): ByteArray? = if (text.isEmpty()) null else TextCodec.encode(text)
+
+    /** Replaces an item's topics (e.g. after model classification), without touching its content version. */
+    fun setTopics(id: Long, topics: List<String>) = db.transaction { replaceTopics(id, topics) }
 
     private fun replaceTopics(id: Long, topics: List<String>) {
         db.execute("DELETE FROM article_topic WHERE article_id=?", listOf(id))
@@ -366,3 +415,29 @@ class Library(private val db: SqlDriver) {
         )
     }
 }
+
+data class SourceState(
+    val id: Long, val key: String, val name: String, val url: String, val type: ContentType, val topic: String, val enabled: Boolean,
+    val etag: String?, val lastModified: String?, val failures: Int, val nextCheck: Long?, val lastSuccess: Long?,
+    val lastChecked: Long?, val lastError: String?, val intervalMinutes: Int, val itemCount: Int,
+)
+
+data class FetchOutcome(
+    val checkedAt: Long, val nextCheck: Long, val failures: Int, val success: Boolean, val error: String? = null,
+    val etag: String? = null, val lastModified: String? = null, val itemCount: Int = -1,
+)
+
+data class DefaultSource(val key: String, val name: String, val url: String, val type: ContentType, val topic: String)
+
+val DEFAULT_SOURCES = listOf(
+    DefaultSource("arxiv-ai", "arXiv · AI", "https://rss.arxiv.org/rss/cs.AI", ContentType.Paper, "LLMs"),
+    DefaultSource("arxiv-cl", "arXiv · Language", "https://rss.arxiv.org/rss/cs.CL", ContentType.Paper, "NLP"),
+    DefaultSource("hf", "Hugging Face", "https://huggingface.co/blog/feed.xml", ContentType.Blog, "LLMs"),
+    DefaultSource("pytorch", "PyTorch", "https://pytorch.org/blog/feed.xml", ContentType.Blog, "Software"),
+    DefaultSource("google", "Google Research", "https://research.google/blog/rss/", ContentType.Blog, "LLMs"),
+)
+
+val DEFAULT_LAYERS = listOf(
+    "LLMs" to Layer.Core, "NLP" to Layer.Near, "Software" to Layer.Near,
+    "Hardware" to Layer.Adjacent, "AI audio" to Layer.Adjacent, "AI video" to Layer.Discovery,
+)

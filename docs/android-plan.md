@@ -126,6 +126,17 @@ Defects found by these tests and fixed before commit:
 - `PRAGMA incremental_vacuum` frees pages only as it is stepped; some drivers step it once. Without the bounded loop in `Library.compact()`, retention left the file larger (16.6 MB) instead of smaller.
 - Retention trimmed excerpts of items it was about to delete.
 
+## Phase 2 results
+
+The phone now keeps its own library and refreshes feeds without a computer:
+- `core/feeds`: a strict XML reader that rejects DTDs and entity declarations outright (no XXE or entity expansion), bounded depth and element count; HTML-to-text that never renders markup; parsers for RSS 2.0, RSS 1.0 (RDF), Atom (text/html/xhtml content), and JSON Feed; RFC 822 and ISO dates.
+- `Refresher`: only due sources are fetched; ETag / Last-Modified conditional requests (a 304 costs almost no data); redirects handled in core (up to 3, HTTPS only; permanent redirects move the subscription, temporary ones do not); exponential backoff per source (1 h, 2 h, 4 h … capped at 24 h) and `Retry-After` honored; 3 MB limit; a failed source keeps its earlier items. New items are tagged with keyword rules over the owner's own topics (the source topic when nothing matches), then optionally by the owner's classification model for up to 10 new items. Retention runs after each refresh.
+- Schema v2 adds per-source refresh state. New databases are created at v1 and migrated forward, so the migration path runs on every install.
+- First run seeds five public research feeds and default interest layers. No sample articles are shown as news.
+- Android: `BundledSqlDriver` (androidx.sqlite bundled SQLite, one locked connection), `OkHttpFeedTransport` (public addresses only, DNS pinned, no automatic redirects), `PhoneRefreshWorker` (hourly WorkManager job, network connected and battery not low), and a "Phone library" panel in Settings with refresh, hourly on/off, and per-source status. Full screens come in Phase 3.
+
+90 core tests pass on JVM. The default publisher feeds could not be fetched from the development environment (its proxy blocks them), so live-feed parsing is validated by the fixture feeds and must be confirmed on a device.
+
 ## Model connections
 
 No model is built in or required. Ranking, dedup, search, watchlists, and retention are rules. Each AI task (classification, summarization, embeddings, reranking, evidence drafts, Q&A) has its own route: a primary and an optional fallback, chosen from:

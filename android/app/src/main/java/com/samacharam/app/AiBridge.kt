@@ -43,13 +43,13 @@ internal fun InetAddress.isPrivateNetwork(): Boolean {
 }
 
 /** Raised when an endpoint resolves to addresses its location does not allow. */
-private class BlockedAddressException(message: String) : UnknownHostException(message)
+internal class BlockedAddressException(message: String) : UnknownHostException(message)
 
 /**
  * Resolves once, validates every address for the request's [Location], and hands OkHttp exactly
  * those addresses, so DNS cannot be switched to a private address after the check (rebinding).
  */
-private class ValidatingDns(private val location: Location) : Dns {
+internal class ValidatingDns(private val location: Location) : Dns {
     override fun lookup(hostname: String): List<InetAddress> {
         val addresses = Dns.SYSTEM.lookup(hostname)
         val ok = when (location) {

@@ -87,8 +87,18 @@ object Schema {
         )""",
     )
 
-    /** Ordered migrations: index i upgrades version i+1 to i+2. Empty until the first schema change. */
-    val migrations: List<List<String>> = emptyList()
+    /** Ordered migrations: index i upgrades version i+1 to i+2. New databases are created at v1 and migrated forward. */
+    val migrations: List<List<String>> = listOf(
+        // v2: feed refresh state per source.
+        listOf(
+            "ALTER TABLE source ADD COLUMN last_checked INTEGER",
+            "ALTER TABLE source ADD COLUMN last_error TEXT",
+            "ALTER TABLE source ADD COLUMN interval_minutes INTEGER NOT NULL DEFAULT 60",
+            "ALTER TABLE source ADD COLUMN item_count INTEGER NOT NULL DEFAULT 0",
+        ),
+    )
+
+    val LATEST: Int get() = VERSION + migrations.size
 }
 
 object ArticleFlags {
