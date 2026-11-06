@@ -18,7 +18,13 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
-      - run: gradle -p android assembleDebug testDebugUnitTest --no-daemon
+      - run: gradle -p android :core:jvmTest assembleDebug testDebugUnitTest --no-daemon
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-storage-report
+          path: android/core/build/storage-report.txt
+          if-no-files-found: ignore
       - uses: actions/upload-artifact@v4
         with:
           name: samacha-RAM-debug-apk
