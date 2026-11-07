@@ -1,0 +1,45 @@
+name: Android emulator
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  emulator:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          log-accepted-android-sdk-licenses: false
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - run: gradle -p android :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: |
+            gradle -p android :app:connectedDebugAndroidTest --no-daemon || (adb logcat -d | grep -E "LIVE FEED|AndroidRuntime|samacharam" | tail -200; exit 1)
+            adb logcat -d | grep "LIVE FEED" || true
+            adb pull /sdcard/Android/data/com.samacharam.app/files/screens android-screens || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-emulator-results
+          path: |
+            android-screens/
+            android/app/build/reports/androidTests/
+          if-no-files-found: ignore
