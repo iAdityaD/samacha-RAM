@@ -35,7 +35,7 @@ object FeedParser {
     }
 
     private fun <T> build(title: String?, entries: List<T>, feedUrl: String, map: (T) -> FeedItem?): ParsedFeed {
-        if (entries.isEmpty()) throw XmlException("Feed contains no entries.")
+        // An empty feed is valid (arXiv publishes nothing on weekends); only the root element decides what is a feed.
         val items = entries.take(MAX_ITEMS).mapNotNull { runCatching { map(it) }.getOrNull() }
         return ParsedFeed(HtmlText.toText(title ?: feedUrl).take(200), items, entries.take(MAX_ITEMS).size - items.size)
     }

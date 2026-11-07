@@ -127,7 +127,15 @@ Abstract: We present a streaming encoder &lt;i&gt;quantized&lt;/i&gt; to 4 bits.
 
     @Test fun rejectsNonFeeds() {
         assertFailsWith<XmlException> { FeedParser.parse("<html><body>Not a feed</body></html>", "https://x.org/", ContentType.Blog) }
-        assertFailsWith<XmlException> { FeedParser.parse("<rss><channel><title>Empty</title></channel></rss>", "https://x.org/", ContentType.Blog) }
+        assertFailsWith<XmlException> { FeedParser.parse("<rss><title>No channel</title></rss>", "https://x.org/", ContentType.Blog) }
+    }
+
+    @Test fun emptyFeedsAreValid() {
+        // arXiv's RSS has no items on weekends; that is not an error.
+        val feed = FeedParser.parse("<rss version=\"2.0\"><channel><title>cs.AI updates on arXiv.org</title></channel></rss>", "https://rss.arxiv.org/rss/cs.AI", ContentType.Paper)
+        assertEquals(0, feed.items.size)
+        assertEquals("cs.AI updates on arXiv.org", feed.title)
+        assertEquals(0, FeedParser.parse("""{"version":"https://jsonfeed.org/version/1.1","title":"J","items":[]}""", "https://j.org/f.json", ContentType.Blog).items.size)
     }
 
     @Test fun resolvesLinks() {

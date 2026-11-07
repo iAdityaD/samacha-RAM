@@ -130,6 +130,17 @@ class RefresherTest {
         assertEquals("Feed is larger than 3 MB.", refresher().refresh(force = true).sources.single().error)
     }
 
+    @Test fun emptyFeedIsHealthyNotAFailure() {
+        onlySource()
+        responder = { _, _ -> ok("<rss><channel><title>Weekend</title></channel></rss>".encodeToByteArray()) }
+        val report = refresher().refresh()
+        assertEquals(0, report.failed)
+        val hf = library.sources().single { it.key == "hf" }
+        assertEquals(0, hf.failures)
+        assertNull(hf.lastError)
+        assertEquals(now + 60 * 60_000L, hf.nextCheck)
+    }
+
     @Test fun refreshAppliesRetention() {
         onlySource()
         responder = { _, _ -> ok(rss("Old news")) }

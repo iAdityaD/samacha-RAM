@@ -137,6 +137,28 @@ The phone now keeps its own library and refreshes feeds without a computer:
 
 90 core tests pass on JVM. The default publisher feeds could not be fetched from the development environment (its proxy blocks them), so live-feed parsing is validated by the fixture feeds and must be confirmed on a device.
 
+## Phase 3 results
+
+The Android app is now standalone. The screens that depended on the computer host (`ApiClient`, `OfflineStore`, `BriefingWorker`) are removed; the old host briefing job is cancelled on first launch.
+
+| Screen | What it does |
+|---|---|
+| Today | Daily briefing (finite, time-budgeted, "caught up" when done), For you / Following / mission feeds, full-text search, a stated reason for every item. Optional model-assisted ordering runs only when tapped. |
+| Article | Excerpt with access and evidence labels, open original, save/unsave, mark read, notes, summary and Q&A through the task's route (showing which model ran, where, and any fallback), five feedback buttons |
+| Library | Saved items with notes and highlights; Markdown export through the share sheet |
+| Interests | Topic layers, add/remove topics, reading budget, missions with end dates |
+| Sources | Status per feed (healthy, unavailable with the reason and retry time, paused), pause, unsubscribe, add an HTTPS feed and fetch it immediately |
+| Settings | Briefing reminder (once a day after the chosen local time), background refresh, tracking switch, clear history and feedback, storage use and cleanup, import of the web app's export file |
+| Model connections | Privacy and cost switches, primary/fallback per task, connected models with Test and Remove, add a model (OpenAI-compatible, Claude, Gemini, Ollama, on-device), on-device bundle import |
+
+Sharing a link to the app saves it to the library without fetching the page.
+
+Core additions: schema v3 (feedback, missions), source add/remove, topic removal, link clipping, notes, storage details, briefing schedule, explained feed rows, and model setup that keeps keys out of settings. 101 core tests pass on JVM.
+
+The **Android emulator** workflow runs instrumented tests on an API 34 emulator: the bundled SQLite driver with the real schema and FTS5, a live refresh of the default publisher feeds, and every screen opening without a crash. Screenshots are uploaded as `android-emulator-results`.
+
+First emulator run (7 November 2026, a Saturday): the database and all screens passed. Live feeds: Google Research 100 items, Hugging Face 200 (the per-feed cap), PyTorch 10. Both arXiv feeds were reported as failures ("Feed contains no entries") because arXiv publishes no announcements on weekends. An empty feed is valid, so it is now recorded as a healthy fetch with no items instead of triggering backoff.
+
 ## Model connections
 
 No model is built in or required. Ranking, dedup, search, watchlists, and retention are rules. Each AI task (classification, summarization, embeddings, reranking, evidence drafts, Q&A) has its own route: a primary and an optional fallback, chosen from:
@@ -160,7 +182,7 @@ Rules enforced in `core/ai`, before any key is read or request built:
 
 Anthropic adapter: raw HTTP to `/v1/messages` with `anthropic-version: 2026-10-21` (this version rejects `temperature`, so none is sent), `output_config.effort` low for classification/reranking and medium otherwise, only `text` content blocks are read, and `refusal`/`max_tokens` stop reasons are errors. For Claude models that support it, server-side refusal fallback is enabled (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`). Anthropic has no embeddings endpoint. The adapter is hand-written HTTP rather than the Java SDK because `core` is platform-neutral (for a later iOS client) and provider-neutral.
 
-The settings screens (add model, test connection, assign routes, privacy switches) arrive with Phase 3, when the Android app has its own library database.
+The settings screens are in Settings → Model connections (Phase 3).
 
 ## Remaining limits
 
