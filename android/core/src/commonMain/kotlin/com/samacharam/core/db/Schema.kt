@@ -96,6 +96,17 @@ object Schema {
             "ALTER TABLE source ADD COLUMN interval_minutes INTEGER NOT NULL DEFAULT 60",
             "ALTER TABLE source ADD COLUMN item_count INTEGER NOT NULL DEFAULT 0",
         ),
+        // v3: explicit feedback and temporary missions.
+        listOf(
+            """CREATE TABLE feedback(
+                id INTEGER PRIMARY KEY,
+                article_id INTEGER NOT NULL REFERENCES article(id) ON DELETE CASCADE,
+                reason TEXT NOT NULL,
+                at INTEGER NOT NULL
+            )""",
+            "CREATE INDEX feedback_article ON feedback(article_id)",
+            "CREATE TABLE mission(id INTEGER PRIMARY KEY, title TEXT NOT NULL, topics TEXT NOT NULL, expires TEXT NOT NULL, created INTEGER NOT NULL)",
+        ),
     )
 
     val LATEST: Int get() = VERSION + migrations.size

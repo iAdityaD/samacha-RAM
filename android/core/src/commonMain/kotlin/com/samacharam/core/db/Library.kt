@@ -1,6 +1,9 @@
 package com.samacharam.core.db
 
 import com.samacharam.core.Article
+import com.samacharam.core.Feedback
+import com.samacharam.core.FeedbackReason
+import com.samacharam.core.Mission
 import com.samacharam.core.ContentType
 import com.samacharam.core.DAY_MS
 import com.samacharam.core.FeedItem
@@ -33,7 +36,10 @@ data class RetentionPolicy(val keepExcerptDays: Int = 30, val deleteAfterDays: I
 
 data class RetentionReport(val excerptsDropped: Int, val articlesDeleted: Int)
 
-data class StorageStats(val bytes: Long, val freeBytes: Long, val articles: Long, val saved: Long, val highlights: Long, val history: Long)
+data class StorageStats(
+    val bytes: Long, val freeBytes: Long, val articles: Long, val saved: Long, val highlights: Long, val history: Long,
+    val feedback: Long = 0, val excerptBytes: Long = 0, val trimmedArticles: Long = 0,
+)
 
 data class SavedItem(val article: Article, val savedAt: Long, val note: String, val highlights: List<Highlight>)
 
@@ -74,6 +80,19 @@ class Library(private val db: SqlDriver) {
         get() = meta("tracking") != "0"
         set(value) = setMeta("tracking", if (value) "1" else "0")
 
+    var briefingEnabled: Boolean
+        get() = meta("briefing.enabled") == "1"
+        set(value) = setMeta("briefing.enabled", if (value) "1" else "0")
+
+    /** Local time of day, HH:MM. */
+    var briefingTime: String
+        get() = meta("briefing.time") ?: "08:00"
+        set(value) { require(Regex("([01]\\d|2[0-3]):[0-5]\\d").matches(value)) { "Use a 24-hour time such as 08:00." }; setMeta("briefing.time", value) }
+
+    var briefingLastDay: String?
+        get() = meta("briefing.lastDay")
+        set(value) = setMeta("briefing.lastDay", value ?: "")
+
     var budgetMinutes: Int
         get() = meta("budget")?.toIntOrNull() ?: 15
         set(value) { require(value in 1..120) { "Reading budget must be 1–120 minutes." }; setMeta("budget", value.toString()) }
@@ -109,6 +128,14 @@ class Library(private val db: SqlDriver) {
         db.execute("UPDATE topic SET layer=? WHERE id=?", listOf(layer.code, id))
     }
 
+    /** Removes a topic from the interest map and from item tags. Sources keep working with no default topic. */
+    fun removeTopic(name: String) = db.transaction {
+        val id = db.query("SELECT id FROM topic WHERE name=?", listOf(name)) { it.long(0) }.firstOrNull() ?: return@transaction
+        db.execute("DELETE FROM article_topic WHERE topic_id=?", listOf(id))
+        db.execute("UPDATE source SET topic_id=NULL WHERE topic_id=?", listOf(id))
+        db.execute("DELETE FROM topic WHERE id=?", listOf(id))
+    }
+
     fun profile(): Profile = Profile(
         topics = db.query("SELECT name, layer FROM topic") { it.string(0)!! to Layer.fromCode(it.long(1)!!.toInt()) }.toMap(),
         budgetMinutes = budgetMinutes,
@@ -140,6 +167,25 @@ class Library(private val db: SqlDriver) {
             nextCheck = it.long(10), lastSuccess = it.long(11), lastChecked = it.long(12), lastError = it.string(13),
             intervalMinutes = it.long(14)!!.toInt(), itemCount = it.long(15)!!.toInt(),
         )
+    }
+
+    /** Adds a public HTTPS feed. The first refresh validates it; a failing feed shows its error in Sources. */
+    fun addSource(url: String, name: String, type: ContentType, topic: String): String {
+        val canonical = canonicalUrl(url)
+        require(canonical.startsWith("https://")) { "Feeds must use HTTPS." }
+        require(name.trim().length in 1..100) { "Give the source a name (up to 100 characters)." }
+        require(db.queryLong("SELECT count(*) FROM source WHERE url=?", listOf(canonical)) == 0L) { "You already follow this feed." }
+        require(db.queryLong("SELECT count(*) FROM source") < 200) { "You can follow up to 200 feeds." }
+        val key = "user-" + fnv64(canonical).toULong().toString(16)
+        upsertSource(key, name.trim(), canonical, type, topic)
+        return key
+    }
+
+    /** Unsubscribes. Articles already stored remain in the library until retention removes them. */
+    fun removeSource(key: String) = db.transaction {
+        val id = db.query("SELECT id FROM source WHERE key=?", listOf(key)) { it.long(0) }.firstOrNull() ?: return@transaction
+        db.execute("UPDATE article SET source_id=NULL WHERE source_id=?", listOf(id))
+        db.execute("DELETE FROM source WHERE id=?", listOf(id))
     }
 
     fun setSourceEnabled(key: String, enabled: Boolean) =
@@ -304,6 +350,29 @@ class Library(private val db: SqlDriver) {
 
     // ---- library ----
 
+    fun isSaved(articleId: Long): Boolean = db.queryLong("SELECT count(*) FROM saved WHERE article_id=?", listOf(articleId)) > 0
+
+    fun note(articleId: Long): String =
+        db.query("SELECT note FROM saved WHERE article_id=?", listOf(articleId)) { it.bytes(0)?.let(TextCodec::decode) ?: "" }.firstOrNull() ?: ""
+
+    /** Saves a link shared from another app. Only the URL and its shared title are stored; nothing is fetched. */
+    fun clip(url: String, title: String?, now: Long): Long {
+        val canonical = canonicalUrl(url)
+        val existing = db.query("SELECT id FROM article WHERE url_hash=?", listOf(urlHash(canonical))) { it.long(0)!! }.firstOrNull()
+        val id = existing ?: run {
+            val host = canonical.substringAfter("://").substringBefore('/')
+            val item = FeedItem(canonical, title?.trim()?.takeIf { it.isNotEmpty() } ?: host, "", null, "", ContentType.Article, emptyList())
+            when (val r = upsertArticle(null, item, now, detectDuplicates = false)) {
+                is UpsertResult.Inserted -> r.id
+                is UpsertResult.Updated -> r.id
+                is UpsertResult.Unchanged -> r.id
+                else -> throw IllegalArgumentException("This link was removed earlier and cannot be re-added automatically.")
+            }
+        }
+        save(id, now)
+        return id
+    }
+
     fun save(articleId: Long, now: Long, note: String? = null) {
         require(db.queryLong("SELECT count(*) FROM article WHERE id=?", listOf(articleId)) == 1L) { "Article not found." }
         db.execute("INSERT OR IGNORE INTO saved(article_id,saved_at) VALUES(?,?)", listOf(articleId, now))
@@ -348,7 +417,46 @@ class Library(private val db: SqlDriver) {
     fun readIds(): Set<Long> =
         db.query("SELECT DISTINCT article_id FROM history WHERE kind=?", listOf(ReadingEvent.MarkRead.code)) { it.long(0)!! }.toSet()
 
-    fun clearHistory() = db.execute("DELETE FROM history")
+    /** Clears reading history and the feedback derived from reading; saved items and notes stay. */
+    fun clearHistory() = db.transaction {
+        db.execute("DELETE FROM history")
+        db.execute("DELETE FROM feedback")
+    }
+
+    // ---- feedback and missions ----
+
+    /** Explicit feedback. Nothing is recorded while tracking is paused. */
+    fun addFeedback(articleId: Long, reason: FeedbackReason, now: Long): Boolean {
+        if (!tracking) return false
+        require(db.queryLong("SELECT count(*) FROM article WHERE id=?", listOf(articleId)) == 1L) { "Article not found." }
+        db.execute("INSERT INTO feedback(article_id,reason,at) VALUES(?,?,?)", listOf(articleId, reason.wire, now))
+        return true
+    }
+
+    fun feedback(): List<Feedback> {
+        val topics = topicsById()
+        return db.query("SELECT article_id, reason, at FROM feedback ORDER BY id") { row ->
+            val reason = FeedbackReason.entries.firstOrNull { it.wire == row.string(1) } ?: FeedbackReason.NotNow
+            Feedback(row.long(0)!!, topics[row.long(0)!!].orEmpty(), reason, row.long(2)!!)
+        }
+    }
+
+    /** A mission filters a feed for a while; it never changes the global layers. */
+    fun addMission(title: String, topics: Set<String>, expires: String, now: Long): Long {
+        val clean = title.trim()
+        require(clean.length in 1..120) { "Give the mission a name (up to 120 characters)." }
+        require(Regex("\\d{4}-\\d{2}-\\d{2}").matches(expires)) { "Choose an end date." }
+        val known = profile().topics.keys
+        require(topics.isNotEmpty() && topics.all { it in known }) { "Choose at least one of your topics." }
+        db.execute("INSERT INTO mission(title,topics,expires,created) VALUES(?,?,?,?)", listOf(clean, topics.sorted().joinToString("\u001F"), expires, now))
+        return db.queryLong("SELECT max(id) FROM mission")
+    }
+
+    fun missions(): List<Mission> = db.query("SELECT id, title, topics, expires FROM mission ORDER BY expires") {
+        Mission(it.long(0)!!.toString(), it.string(1)!!, it.string(2)!!.split('\u001F').filter(String::isNotEmpty).toSet(), it.string(3)!!)
+    }
+
+    fun deleteMission(id: Long) = db.execute("DELETE FROM mission WHERE id=?", listOf(id))
 
     // ---- retention ----
 
@@ -412,6 +520,9 @@ class Library(private val db: SqlDriver) {
             saved = db.queryLong("SELECT count(*) FROM saved"),
             highlights = db.queryLong("SELECT count(*) FROM highlight"),
             history = db.queryLong("SELECT count(*) FROM history"),
+            feedback = db.queryLong("SELECT count(*) FROM feedback"),
+            excerptBytes = db.queryLong("SELECT COALESCE(sum(length(excerpt)),0) FROM article"),
+            trimmedArticles = db.queryLong("SELECT count(*) FROM article WHERE flags & ? <> 0", listOf(ArticleFlags.EXCERPT_PRUNED)),
         )
     }
 }

@@ -1,6 +1,14 @@
 package com.samacharam.app
 
+import android.Manifest
+import android.app.Notification
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.SQLiteStatement
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
@@ -12,6 +20,8 @@ import androidx.work.WorkManager
 import androidx.work.Worker
 import androidx.work.WorkerParameters
 import com.samacharam.core.ai.Location
+import com.samacharam.core.app.BriefingSchedule
+import com.samacharam.core.app.Feeds
 import com.samacharam.core.db.Library
 import com.samacharam.core.db.SqlDriver
 import com.samacharam.core.db.SqlRow
@@ -161,8 +171,35 @@ class OkHttpFeedTransport : FeedTransport {
 class PhoneRefreshWorker(context: Context, parameters: WorkerParameters) : Worker(context, parameters) {
     override fun doWork(): Result = try {
         PhoneLibrary.refresher(applicationContext).refresh()
+        BriefingNotifier.notifyIfDue(applicationContext)
         Result.success()
     } catch (_: Exception) {
         Result.retry()
+    }
+}
+
+/** Shows at most one briefing notification per local day, after the owner's chosen time. */
+object BriefingNotifier {
+    private const val CHANNEL = "briefing"
+
+    fun notifyIfDue(context: Context) {
+        val library = PhoneLibrary.get(context)
+        val now = java.time.LocalDateTime.now()
+        val today = now.toLocalDate().toString()
+        if (!BriefingSchedule.due(library.briefingEnabled, library.briefingTime, today, now.hour * 60 + now.minute, library.briefingLastDay)) return
+        val (queue, _) = Feeds.dailyBriefing(library, System.currentTimeMillis())
+        library.briefingLastDay = today
+        if (queue.articles.isEmpty()) return
+        if (Build.VERSION.SDK_INT >= 33 && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) return
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(NotificationChannel(CHANNEL, "Daily briefing", NotificationManager.IMPORTANCE_DEFAULT))
+        val open = PendingIntent.getActivity(context, 0, Intent(context, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val notification = Notification.Builder(context, CHANNEL)
+            .setSmallIcon(android.R.drawable.ic_menu_info_details)
+            .setContentTitle("Your briefing: ${queue.articles.size} items, about ${queue.minutes} min")
+            .setContentText(queue.articles.first().title)
+            .setContentIntent(open).setAutoCancel(true)
+            .build()
+        manager.notify(1, notification)
     }
 }

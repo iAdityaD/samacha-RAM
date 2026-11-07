@@ -39,7 +39,7 @@ class RefresherTest {
         assertEquals(5, library.sources().size)
         assertEquals(Layer.Core, library.profile().topics["LLMs"])
         assertTrue(library.articles().isEmpty())
-        assertEquals("2", library.meta("schema_version"))
+        assertEquals("3", library.meta("schema_version"))
     }
 
     @Test fun fetchesParsesAndTagsWithOwnersTopics() {
