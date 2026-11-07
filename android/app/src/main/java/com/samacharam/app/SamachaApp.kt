@@ -27,7 +27,6 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -71,12 +70,16 @@ class AppContext(val activity: ComponentActivity) {
 
 /** Loads data off the main thread; reloads when [AppContext.version] or any key changes. */
 @Composable
-fun <T> rememberLoaded(ctx: AppContext, vararg keys: Any?, load: () -> T): State<T?> =
-    produceState<T?>(null, *(arrayOf<Any?>(ctx.version) + keys)) {
-        value = withContext(Dispatchers.IO) {
+fun <T> rememberLoaded(ctx: AppContext, vararg keys: Any?, load: () -> T): State<T?> {
+    val state = remember { mutableStateOf<T?>(null) }
+    val reloadKey: List<Any?> = listOf(ctx.version, *keys)
+    LaunchedEffect(reloadKey) {
+        state.value = withContext(Dispatchers.IO) {
             runCatching(load).onFailure { ctx.message = it.message ?: "Could not load data." }.getOrNull()
         }
     }
+    return state
+}
 
 enum class Tab(val label: String) { Today("Today"), Library("Library"), Interests("Interests"), Sources("Sources"), Settings("Settings") }
 

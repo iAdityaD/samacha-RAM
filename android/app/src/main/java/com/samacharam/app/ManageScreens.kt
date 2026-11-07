@@ -118,7 +118,7 @@ fun SourcesScreen(ctx: AppContext) {
                         when {
                             !s.enabled -> "Paused."
                             s.lastError != null -> "Unavailable: ${s.lastError} Earlier items are kept; retrying " + (s.nextCheck?.let { "after ${java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date(it))}" } ?: "soon") + "."
-                            s.lastSuccess != null -> "Healthy · ${s.itemCount} items in the last fetch · checked ${formatDate(s.lastChecked ?: s.lastSuccess)}"
+                            s.lastSuccess != null -> "Healthy · ${s.itemCount} items in the last fetch · checked ${formatDate(s.lastChecked ?: s.lastSuccess ?: 0L)}"
                             else -> "Not checked yet."
                         },
                         style = MaterialTheme.typography.bodySmall,
