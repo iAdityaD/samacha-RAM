@@ -75,14 +75,13 @@ class ScreensTest {
 
     /**
      * The test runner uninstalls the app afterwards (deleting its files), so screenshots are written to the
-     * log as half-size JPEG in base64 chunks; CI prints them for review.
+     * log as JPEG in base64 chunks; CI prints them for review.
      */
     private fun screenshot(name: String) {
         rule.waitForIdle()
         Thread.sleep(600) // let transitions settle
         val full = rule.onRoot().captureToImage().asAndroidBitmap()
-        val small = Bitmap.createScaledBitmap(full, full.width / 2, full.height / 2, true)
-        val bytes = java.io.ByteArrayOutputStream().also { small.compress(Bitmap.CompressFormat.JPEG, 82, it) }.toByteArray()
+        val bytes = java.io.ByteArrayOutputStream().also { full.compress(Bitmap.CompressFormat.JPEG, 80, it) }.toByteArray()
         val data = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
         val chunks = data.chunked(3000)
         chunks.forEachIndexed { i, c -> android.util.Log.i("SCREENSHOT", "$name ${i + 1}/${chunks.size} $c") }
@@ -101,7 +100,8 @@ class ScreensTest {
         // Today with real feeds.
         waitFor("Your briefing")
         tapIcon("Refresh")
-        waitFor("Picked for your interests", 90_000)
+        // The briefing card is at the top, so it is on screen; list headers further down may not be composed yet.
+        try { waitFor("Start reading", 90_000) } catch (e: Throwable) { screenshot("error-today"); throw e }
         screenshot("03-today")
         tap("Start reading")
         waitFor("Ask about this excerpt")
