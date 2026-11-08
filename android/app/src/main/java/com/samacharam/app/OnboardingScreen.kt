@@ -52,6 +52,8 @@ private val SUGGESTED = listOf("LLMs", "NLP", "Software", "Hardware", "AI audio"
 @Composable
 fun OnboardingScreen(ctx: AppContext, done: () -> Unit) {
     var step by remember { mutableIntStateOf(0) }
+    androidx.compose.runtime.DisposableEffect(Unit) { android.util.Log.i("samacharam", "onboarding entered"); onDispose { android.util.Log.i("samacharam", "onboarding left") } }
+    androidx.compose.runtime.SideEffect { android.util.Log.i("samacharam", "onboarding step=$step") }
     val current by rememberLoaded(ctx) { ctx.library.profile().topics }
     var core by remember(current) { mutableStateOf(current.orEmpty().filterValues { it == Layer.Core }.keys) }
     var near by remember(current) { mutableStateOf(current.orEmpty().filterValues { it == Layer.Near }.keys) }
