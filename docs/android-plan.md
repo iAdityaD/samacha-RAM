@@ -159,6 +159,21 @@ The **Android emulator** workflow runs instrumented tests on an API 34 emulator:
 
 First emulator run (7 November 2026, a Saturday): the database and all screens passed. Live feeds: Google Research 100 items, Hugging Face 200 (the per-feed cap), PyTorch 10. Both arXiv feeds were reported as failures ("Feed contains no entries") because arXiv publishes no announcements on weekends. An empty feed is valid, so it is now recorded as a healthy fetch with no items instead of triggering backoff.
 
+## Phase 4 results
+
+Optional Google Drive backup and sync (Settings → Backup and sync). Phone-only remains the default.
+
+- Sign-in uses Google's Android authorization API with only `drive.appdata`: a hidden folder for this app. The app cannot see other Drive files.
+- Encryption happens on the phone: a random 256-bit data key encrypts every file with AES-256-GCM, and the file name is authenticated so files cannot be swapped. `keys.json` holds the data key wrapped with a PBKDF2-HMAC-SHA256 key (310,000 iterations) derived from the owner's passphrase. A wrong passphrase or altered file fails authentication. The data key on each phone lives in the Android Keystore vault.
+- Design change from the earlier plan: instead of change batches plus compaction, each phone uploads one compressed, encrypted file holding the full merged state, and only when it changed. User data is small, so this is simpler, idempotent, and any single file restores everything.
+- Merging: stable identities (topic name, canonical URL, content hash), last-writer-wins per record with tombstones (kept 180 days). Concurrent edits to the same note keep both texts, marked "Edited on another device". A phone joining an existing backup defers to it, so its first-run defaults cannot overwrite the owner's settings (a test proves this by failing when the rule is removed).
+- Synced: interest layers, budget, sources, saved items with notes, highlights, missions. Not synced: feed items (each phone fetches them), reading history, API keys.
+- Background sync runs after the hourly refresh. If Google needs the owner to approve again, background sync is skipped and Settings says so.
+- Signing: CI signs APKs with the owner's key from repository secrets and fails unless the APK's SHA-1 matches the one registered with Google.
+- Deferred: Google Block Store key backup (so a new phone would not need the passphrase). It needs another Play services library and cannot be tested in CI.
+
+111 core tests pass on JVM (8 for sync: restore, defaults vs. owner choices, deletions, concurrent notes and convergence, joining with local items, ciphertext only on Drive, tampering and swapped files, no redundant uploads, disconnect). The emulator runs the sync engine on Android's crypto providers. Real Google sign-in and Drive calls need the owner's account on a phone.
+
 ## Model connections
 
 No model is built in or required. Ranking, dedup, search, watchlists, and retention are rules. Each AI task (classification, summarization, embeddings, reranking, evidence drafts, Q&A) has its own route: a primary and an optional fallback, chosen from:
