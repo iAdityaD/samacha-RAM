@@ -65,45 +65,37 @@ import com.samacharam.core.MarkdownExport
 
 private fun mb(bytes: Long) = if (bytes < 1_048_576) "%.0f KB".format(bytes / 1024.0) else "%.1f MB".format(bytes / 1_048_576.0)
 
-private data class ProfileSummary(
-    val articles: Long, val saved: Long, val sources: Int, val healthy: Int, val models: Int,
-    val syncing: Boolean, val lastSync: Long?, val briefing: Boolean, val time: String, val tracking: Boolean, val bytes: Long, val theme: ThemeMode,
+private data class SettingsSummary(
+    val models: Int, val syncing: Boolean, val lastSync: Long?, val briefing: Boolean, val time: String, val tracking: Boolean, val bytes: Long, val theme: ThemeMode,
 )
 
 @Composable
 private fun Chevron() = Icon(Icons.Outlined.ChevronRight, null, tint = colors.inkFaint)
 
+/** Settings and data: everything about how the app works. What you follow lives on Profile, not here. */
 @Composable
-fun ProfileScreen(ctx: AppContext, nav: NavHostController) {
+fun SettingsScreen(ctx: AppContext, nav: NavHostController) {
     val s by rememberLoaded(ctx) {
-        val l = ctx.library; val stats = l.stats(); val sources = l.sources()
-        ProfileSummary(
-            stats.articles, stats.saved, sources.count { it.enabled }, sources.count { it.enabled && it.lastError == null && it.lastSuccess != null },
-            l.aiSettings().providers.size, PhoneSync.enabled(l), l.meta("sync.lastSync")?.toLongOrNull(), l.briefingEnabled, l.briefingTime, l.tracking, stats.bytes,
+        val l = ctx.library
+        SettingsSummary(
+            l.aiSettings().providers.size, PhoneSync.enabled(l), l.meta("sync.lastSync")?.toLongOrNull(), l.briefingEnabled, l.briefingTime, l.tracking, l.stats().bytes,
             ThemeMode.entries.firstOrNull { it.name == l.meta("ui.theme") } ?: ThemeMode.System,
         )
     }
-    val p = s
-    TabPage(ctx, kicker = "Settings and data", title = "Profile",
-        status = p?.let { "${it.articles} stories · ${it.saved} saved · ${if (it.syncing) "synced to Google Drive" else "stored on this phone"}" }) {
-        if (p == null) return@TabPage
-        item(key = "reading") {
-            SectionLabel("Reading")
+    AppPage(ctx, "Settings and data", nav = nav) { padding ->
+        val p = s ?: return@AppPage
+        PageColumn(padding) {
+            SectionLabel("Your briefing")
             SettingsGroup {
-                SettingRow("Sources", Icons.Outlined.RssFeed, "${p.healthy} of ${p.sources} healthy", onClick = { nav.navigate(Routes.SOURCES) }) { Chevron() }
                 SettingRow("Briefing and notifications", Icons.Outlined.Notifications, if (p.briefing) "Reminder daily at ${p.time}" else "Reminder off",
                     onClick = { nav.navigate(Routes.BRIEFING) }) { Chevron() }
             }
-        }
-        item(key = "intelligence") {
             SectionLabel("Intelligence")
             SettingsGroup {
                 SettingRow("Model connections", Icons.Outlined.SmartToy,
                     if (p.models == 0) "Built-in rules. Connect a model per task." else "${p.models} model${if (p.models == 1) "" else "s"} connected",
                     onClick = { nav.navigate(Routes.MODELS) }) { Chevron() }
             }
-        }
-        item(key = "data") {
             SectionLabel("Your data")
             SettingsGroup {
                 SettingRow("Backup and sync", Icons.Outlined.CloudSync,
@@ -113,8 +105,6 @@ fun ProfileScreen(ctx: AppContext, nav: NavHostController) {
                 SettingRow("Import and export", Icons.Outlined.ImportExport, "Markdown notes, web app data", onClick = { nav.navigate(Routes.DATA) }) { Chevron() }
                 SettingRow("Privacy", Icons.Outlined.Shield, if (p.tracking) "Reading history on" else "Reading history paused", onClick = { nav.navigate(Routes.PRIVACY) }) { Chevron() }
             }
-        }
-        item(key = "app") {
             SectionLabel("App")
             SettingsGroup {
                 SettingRow("Appearance", Icons.Outlined.Palette, p.theme.label, onClick = { nav.navigate(Routes.APPEARANCE) }) { Chevron() }

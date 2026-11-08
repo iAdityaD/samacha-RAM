@@ -4,6 +4,24 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
@@ -99,6 +117,11 @@ class AppContext(val activity: ComponentActivity) {
     var message by mutableStateOf<String?>(null)
     var busy by mutableStateOf(false)
 
+    /** Ask conversations for this session, keyed by story id (-1 is the whole library). */
+    val askThreads = androidx.compose.runtime.mutableStateMapOf<Long, List<AskMessage>>()
+    /** Which Profile tab is showing (0 topics, 1 sources); other screens can send the owner straight to sources. */
+    var profileTab by mutableIntStateOf(0)
+
     fun run(block: suspend () -> String?) {
         if (busy) return
         busy = true
@@ -153,22 +176,26 @@ fun <T> rememberLoaded(ctx: AppContext, vararg keys: Any?, load: () -> T): State
 }
 
 object Routes {
-    const val TODAY = "today"; const val EXPLORE = "explore"; const val LIBRARY = "library"; const val INTERESTS = "interests"; const val PROFILE = "profile"
+    const val HOME = "home"; const val EXPLORE = "explore"; const val ASK = "ask?article={article}"; const val LIBRARY = "library"; const val PROFILE = "profile"
+    fun ask(articleId: Long = -1L) = "ask?article=$articleId"
     const val ARTICLE = "article/{id}"; fun article(id: Long) = "article/$id"
-    const val SOURCES = "sources"; const val ADD_SOURCE = "sources/add"
+    const val STORY = "story/{deck}"; fun story(deck: String) = "story/" + Uri.encode(deck)
+    const val TOPIC = "topic/{name}"; fun topic(name: String) = "topic/" + Uri.encode(name)
+    const val ACTIVITY = "activity"; const val SETTINGS = "settings"; const val ADD_SOURCE = "sources/add"; const val MISSIONS = "missions"
     const val BRIEFING = "settings/briefing"; const val MODELS = "settings/models"; const val ADD_MODEL = "settings/models/add"; const val ROUTES = "settings/models/routes"
     const val SYNC = "settings/sync"; const val PRIVACY = "settings/privacy"; const val STORAGE = "settings/storage"; const val APPEARANCE = "settings/appearance"
-    const val DATA = "settings/data"; const val ABOUT = "settings/about"; const val MISSIONS = "interests/missions"; const val ONBOARDING = "onboarding"
+    const val DATA = "settings/data"; const val ABOUT = "settings/about"; const val ONBOARDING = "onboarding"
 }
 
-private data class TopLevel(val route: String, val label: String, val selected: ImageVector, val unselected: ImageVector)
+private data class TopLevel(val route: String, val target: String, val label: String, val selected: ImageVector, val unselected: ImageVector)
 
+/** Five tabs, icon only (each has a spoken label). Profile shows your initial instead of an icon. */
 private val TOP_LEVEL = listOf(
-    TopLevel(Routes.TODAY, "Today", Icons.Filled.Today, Icons.Outlined.Today),
-    TopLevel(Routes.EXPLORE, "Explore", Icons.Filled.Explore, Icons.Outlined.Explore),
-    TopLevel(Routes.LIBRARY, "Library", Icons.Filled.Bookmarks, Icons.Outlined.Bookmarks),
-    TopLevel(Routes.INTERESTS, "Interests", Icons.Filled.Tune, Icons.Outlined.Tune),
-    TopLevel(Routes.PROFILE, "Profile", Icons.Filled.AccountCircle, Icons.Outlined.AccountCircle),
+    TopLevel(Routes.HOME, Routes.HOME, "Home", Icons.Filled.Home, Icons.Outlined.Home),
+    TopLevel(Routes.EXPLORE, Routes.EXPLORE, "Explore", Icons.Filled.Search, Icons.Outlined.Search),
+    TopLevel(Routes.ASK, Routes.ask(), "Ask", Icons.Filled.AutoAwesome, Icons.Outlined.AutoAwesome),
+    TopLevel(Routes.LIBRARY, Routes.LIBRARY, "Library", Icons.Filled.Bookmarks, Icons.Outlined.Bookmarks),
+    TopLevel(Routes.PROFILE, Routes.PROFILE, "Profile", Icons.Filled.AccountCircle, Icons.Outlined.AccountCircle),
 )
 
 @Composable
@@ -194,42 +221,43 @@ private fun AppNavigation(ctx: AppContext, startOnboarding: Boolean) {
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     val showBar = TOP_LEVEL.any { it.route == route }
-    val rule = com.samacharam.app.ui.colors.rule
-    val navColors = androidx.compose.material3.NavigationBarItemDefaults.colors(
-        selectedIconColor = com.samacharam.app.ui.colors.evergreen, selectedTextColor = com.samacharam.app.ui.colors.ink,
-        indicatorColor = com.samacharam.app.ui.colors.evergreenSoft,
-        unselectedIconColor = com.samacharam.app.ui.colors.inkMuted, unselectedTextColor = com.samacharam.app.ui.colors.inkMuted,
-    )
+    val name by rememberLoaded(ctx) { ctx.library.meta("ui.name")?.ifBlank { null } ?: "Reader" }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             AnimatedVisibility(showBar, enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut()) {
-                NavigationBar(containerColor = com.samacharam.app.ui.colors.paper, tonalElevation = 0.dp,
-                    modifier = Modifier.drawBehind { drawLine(rule, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }) {
-                    TOP_LEVEL.forEach { item ->
-                        val selected = route == item.route
-                        NavigationBarItem(
-                            selected = selected,
-                            onClick = {
-                                if (!selected) nav.navigate(item.route) {
-                                    popUpTo(Routes.TODAY) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            },
-                            icon = { Icon(if (selected) item.selected else item.unselected, contentDescription = null) },
-                            label = { Text(item.label, style = com.samacharam.app.ui.TypeRole.meta) },
-                            colors = navColors,
-                        )
+                val c = com.samacharam.app.ui.colors
+                Column(Modifier.background(c.paper).navigationBarsPadding()) {
+                    androidx.compose.material3.HorizontalDivider(thickness = 1.dp, color = c.rule)
+                    Row(Modifier.fillMaxWidth().height(56.dp), verticalAlignment = Alignment.CenterVertically) {
+                        TOP_LEVEL.forEach { item ->
+                            val selected = route == item.route
+                            Box(
+                                Modifier.weight(1f).fillMaxHeight().selectable(selected, role = Role.Tab) {
+                                    if (!selected) nav.navigate(item.target) {
+                                        popUpTo(Routes.HOME) { saveState = true }
+                                        launchSingleTop = true
+                                        restoreState = true
+                                    }
+                                }.semantics { contentDescription = item.label },
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (item.route == Routes.PROFILE) Box(
+                                    Modifier.size(28.dp).then(if (selected) Modifier.border(1.5.dp, c.ink, CircleShape).padding(2.5.dp) else Modifier),
+                                    contentAlignment = Alignment.Center,
+                                ) { com.samacharam.app.ui.Avatar(name ?: "Reader", if (selected) 23.dp else 26.dp, filled = true) }
+                                else Icon(if (selected) item.selected else item.unselected, null, tint = if (selected) c.ink else c.inkMuted, modifier = Modifier.size(26.dp))
+                            }
+                        }
                     }
                 }
             }
         },
     ) { padding ->
         NavHost(
-            nav, startDestination = if (startOnboarding) Routes.ONBOARDING else Routes.TODAY,
+            nav, startDestination = if (startOnboarding) Routes.ONBOARDING else Routes.HOME,
             modifier = Modifier.padding(padding),
             // Tabs crossfade; detail pages rise 24 dp and fade in (Motion tokens).
             enterTransition = {
@@ -241,16 +269,21 @@ private fun AppNavigation(ctx: AppContext, startOnboarding: Boolean) {
             popEnterTransition = { fadeIn(tween(Motion.STANDARD)) },
             popExitTransition = { slideOutVertically(tween(Motion.EXIT, easing = Motion.EmphasizedAccelerate)) { 72 } + fadeOut(tween(Motion.EXIT)) },
         ) {
-            composable(Routes.ONBOARDING) { OnboardingScreen(ctx) { nav.navigate(Routes.TODAY) { popUpTo(Routes.ONBOARDING) { inclusive = true } } } }
-            composable(Routes.TODAY) { TodayScreen(ctx, nav) }
+            composable(Routes.ONBOARDING) { OnboardingScreen(ctx) { nav.navigate(Routes.HOME) { popUpTo(Routes.ONBOARDING) { inclusive = true } } } }
+            composable(Routes.HOME) { HomeScreen(ctx, nav) }
             composable(Routes.EXPLORE) { ExploreScreen(ctx, nav) }
+            composable(Routes.ASK, arguments = listOf(navArgument("article") { type = NavType.LongType; defaultValue = -1L })) { e ->
+                AskScreen(ctx, nav, e.arguments?.getLong("article") ?: -1L)
+            }
             composable(Routes.LIBRARY) { LibraryScreen(ctx, nav) }
-            composable(Routes.INTERESTS) { InterestsScreen(ctx, nav) }
             composable(Routes.PROFILE) { ProfileScreen(ctx, nav) }
+            composable(Routes.STORY) { e -> StoryPlayerScreen(ctx, nav, e.arguments?.getString("deck") ?: Decks.BRIEFING) }
+            composable(Routes.TOPIC) { e -> TopicScreen(ctx, nav, e.arguments?.getString("name") ?: "") }
+            composable(Routes.ACTIVITY) { ActivityScreen(ctx, nav) }
+            composable(Routes.SETTINGS) { SettingsScreen(ctx, nav) }
             composable(Routes.ARTICLE, arguments = listOf(navArgument("id") { type = NavType.LongType })) { e ->
                 ArticleScreen(ctx, nav, e.arguments?.getLong("id") ?: 0L)
             }
-            composable(Routes.SOURCES) { SourcesScreen(ctx, nav) }
             composable(Routes.ADD_SOURCE) { AddSourceScreen(ctx, nav) }
             composable(Routes.MISSIONS) { MissionsScreen(ctx, nav) }
             composable(Routes.BRIEFING) { BriefingSettingsScreen(ctx, nav) }
@@ -299,38 +332,6 @@ fun BusyLine(ctx: AppContext) {
     Box(Modifier.fillMaxWidth().height(2.dp)) {
         AnimatedVisibility(ctx.busy, enter = fadeIn(), exit = fadeOut()) {
             LinearProgressIndicator(Modifier.fillMaxWidth(), color = com.samacharam.app.ui.colors.evergreen, trackColor = com.samacharam.app.ui.colors.rule)
-        }
-    }
-}
-
-/**
- * Top-level tab: the masthead scrolls away with the list and a compact bar fades in once it has.
- */
-@Composable
-fun TabPage(
-    ctx: AppContext,
-    kicker: String,
-    title: String,
-    status: String? = null,
-    listState: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
-    actions: @Composable RowScope.() -> Unit = {},
-    floating: @Composable () -> Unit = {},
-    content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit,
-) {
-    val collapsed by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 } }
-    Scaffold(containerColor = com.samacharam.app.ui.colors.paper, contentWindowInsets = WindowInsets(0), floatingActionButton = floating) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            androidx.compose.foundation.lazy.LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
-                item(key = "masthead") { com.samacharam.app.ui.Masthead(kicker, title, status, actions) }
-                content()
-            }
-            Column {
-                AnimatedVisibility(collapsed, enter = fadeIn(), exit = fadeOut()) {
-                    com.samacharam.app.ui.CompactBar(title, visible = true, onBack = null, actions = actions)
-                }
-                if (!collapsed) Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
-                BusyLine(ctx)
-            }
         }
     }
 }

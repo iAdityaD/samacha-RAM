@@ -88,10 +88,12 @@ class ScreensTest {
         node.performClick(); rule.waitForIdle()
     }
 
-    private fun tapIcon(description: String) {
-        rule.waitUntil(20_000) { rule.onAllNodesWithContentDescription(description).fetchSemanticsNodes().isNotEmpty() }
-        rule.onAllNodesWithContentDescription(description)[0].performClick(); rule.waitForIdle()
+    private fun tapIcon(description: String, substring: Boolean = false, timeout: Long = 20_000) {
+        rule.waitUntil(timeout) { rule.onAllNodesWithContentDescription(description, substring = substring).fetchSemanticsNodes().isNotEmpty() }
+        rule.onAllNodesWithContentDescription(description, substring = substring)[0].performClick(); rule.waitForIdle()
     }
+
+    private fun hasIcon(description: String) = rule.onAllNodesWithContentDescription(description).fetchSemanticsNodes().isNotEmpty()
 
     /**
      * The test runner uninstalls the app afterwards (deleting its files), so screenshots are written to the
@@ -107,8 +109,8 @@ class ScreensTest {
         chunks.forEachIndexed { i, c -> android.util.Log.i("SCREENSHOT", "$name ${i + 1}/${chunks.size} $c"); Thread.sleep(8) } // avoid log rate limiting
     }
 
-    /** Back to Profile, waiting for the transition to finish before the next tap. */
-    private fun backToProfile() { tapIcon("Back"); waitFor("Settings and data") }
+    /** Back to Settings, waiting for the transition to finish before the next tap. */
+    private fun backToSettings() { tapIcon("Back"); waitFor("Model connections") }
 
     @Test fun walkThroughTheApp() = try { walk() } catch (e: Throwable) { screenshot("error-state"); throw e }
 
@@ -122,25 +124,33 @@ class ScreensTest {
         tap("Continue")
         tap("Start reading")
 
-        // Today with real feeds.
-        waitFor("Your briefing")
-        tapIcon("Refresh")
-        try { waitFor("Start briefing", 90_000) } catch (e: Throwable) { screenshot("error-today"); throw e }
-        screenshot("03-today")
-        tap("Start briefing")
-        waitFor("Your note")
-        screenshot("04-article")
-        tapIcon("Back")
+        // Home with real feeds: refresh if onboarding did not already gather stories.
+        rule.waitUntil(30_000) { hasIcon("More like this") || rule.onAllNodesWithText("Refresh now").fetchSemanticsNodes().isNotEmpty() }
+        if (!hasIcon("More like this")) tap("Refresh now")
+        try { rule.waitUntil(90_000) { hasIcon("More like this") } } catch (e: Throwable) { screenshot("error-home"); throw e }
+        screenshot("03-home")
 
-        tap("Explore"); waitFor("Your topics"); screenshot("05-explore")
-        tap("Library"); waitFor("Kept for later"); screenshot("06-library")
-        tap("Interests"); waitFor("What you follow"); screenshot("07-interests")
-        tap("Profile"); waitFor("Settings and data"); screenshot("08-profile")
-        tap("Model connections"); waitFor("Privacy and cost"); screenshot("09-models"); backToProfile()
-        tap("Backup and sync"); waitFor("How it works"); screenshot("10-sync"); backToProfile()
-        tap("Sources"); waitFor("active sources healthy"); screenshot("11-sources"); backToProfile()
-        tap("Appearance"); tap("Dark"); waitFor("Use wallpaper colors"); screenshot("12-appearance-dark"); backToProfile()
-        tap("Today"); waitFor("Your briefing"); screenshot("13-today-dark")
+        // Briefing as stories, then one story in full.
+        tapIcon("Briefing", substring = true)
+        waitFor("Swipe up to read"); screenshot("04-briefing-story")
+        tap("Swipe up to read")
+        waitFor("Your note"); screenshot("05-article")
+        tapIcon("Back"); tapIcon("Close")
+
+        tapIcon("Explore"); waitFor("Search papers"); screenshot("06-explore")
+        tapIcon("Ask"); waitFor("Ask your library"); screenshot("07-ask")
+        tapIcon("Library"); waitFor("Highlights"); screenshot("08-library")
+        tapIcon("Profile"); waitFor("Edit name"); screenshot("09-profile")
+        tapIcon("Sources"); waitFor("active sources healthy"); screenshot("10-profile-sources")
+        tapIcon("Topics"); tap("LLMs"); waitFor("you read"); screenshot("11-topic"); tapIcon("Back"); waitFor("Edit name")
+
+        tapIcon("Settings and data"); waitFor("Model connections"); screenshot("12-settings")
+        tap("Model connections"); waitFor("Privacy and cost"); screenshot("13-models"); backToSettings()
+        tap("Backup and sync"); waitFor("How it works"); screenshot("14-sync"); backToSettings()
+        tap("Appearance"); tap("Dark"); waitFor("Use wallpaper colors"); screenshot("15-appearance-dark"); backToSettings()
+        tapIcon("Back"); waitFor("Edit name")
+        tapIcon("Home"); rule.waitUntil(20_000) { hasIcon("More like this") }; screenshot("16-home-dark")
+        tapIcon("Activity", substring = true); waitFor("Activity"); screenshot("17-activity")
     }
 }
 

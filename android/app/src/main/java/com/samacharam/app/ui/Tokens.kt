@@ -19,21 +19,21 @@ data class Palette(
     val paper: Color, val paperRaised: Color, val paperSunk: Color,
     val ink: Color, val inkMuted: Color, val inkFaint: Color, val rule: Color,
     val evergreen: Color, val evergreenSoft: Color, val onEvergreen: Color,
-    val saffron: Color, val danger: Color, val dangerSoft: Color, val isDark: Boolean,
+    val saffron: Color, val saffronSoft: Color, val danger: Color, val dangerSoft: Color, val isDark: Boolean,
 )
 
 val LightPalette = Palette(
     paper = Color(0xFFF7F4EE), paperRaised = Color(0xFFFFFDF9), paperSunk = Color(0xFFEFEBE3),
     ink = Color(0xFF1C1B18), inkMuted = Color(0xFF5E5A52), inkFaint = Color(0xFF8D877C), rule = Color(0xFFE2DDD3),
     evergreen = Color(0xFF1E5B45), evergreenSoft = Color(0xFFDCEBE2), onEvergreen = Color(0xFFFFFFFF),
-    saffron = Color(0xFFC97B12), danger = Color(0xFFA8321F), dangerSoft = Color(0xFFF6DDD6), isDark = false,
+    saffron = Color(0xFFC97B12), saffronSoft = Color(0xFFF5E6CC), danger = Color(0xFFA8321F), dangerSoft = Color(0xFFF6DDD6), isDark = false,
 )
 
 val DarkPalette = Palette(
     paper = Color(0xFF12110F), paperRaised = Color(0xFF1B1A17), paperSunk = Color(0xFF22201C),
     ink = Color(0xFFECE7DE), inkMuted = Color(0xFFA8A296), inkFaint = Color(0xFF7A7468), rule = Color(0xFF2E2B26),
     evergreen = Color(0xFF8FCBAE), evergreenSoft = Color(0xFF1F3A2F), onEvergreen = Color(0xFF0E2A20),
-    saffron = Color(0xFFE8A94A), danger = Color(0xFFF0937F), dangerSoft = Color(0xFF3A1E18), isDark = true,
+    saffron = Color(0xFFE8A94A), saffronSoft = Color(0xFF3A2C14), danger = Color(0xFFF0937F), dangerSoft = Color(0xFF3A1E18), isDark = true,
 )
 
 val LocalPalette = staticCompositionLocalOf { LightPalette }

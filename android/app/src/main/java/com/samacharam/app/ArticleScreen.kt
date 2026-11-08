@@ -72,13 +72,6 @@ import com.samacharam.core.ai.ModelResult
 import com.samacharam.core.ai.TaskInput
 import com.samacharam.core.ai.TaskOutput
 
-private data class AiAnswer(val title: String, val provenance: String, val lines: List<Pair<String, String?>>, val notice: String?)
-
-private fun provenance(r: ModelResult): String {
-    val where = when (r.location) { Location.Device -> "on this phone"; Location.LocalNetwork -> "on your network"; Location.Cloud -> "in the cloud" }
-    return "${r.providerName}, $where · ${r.milliseconds} ms" + if (r.fallbackUsed) " · fallback used" else ""
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ArticleScreen(ctx: AppContext, nav: NavHostController, id: Long) {
@@ -87,7 +80,6 @@ fun ArticleScreen(ctx: AppContext, nav: NavHostController, id: Long) {
     val storedNote by rememberLoaded(ctx, id) { ctx.library.note(id) }
     val related by rememberLoaded(ctx, id) { ctx.library.related(id) }
     var note by remember(storedNote) { mutableStateOf(storedNote ?: "") }
-    var asking by remember { mutableStateOf(false) }
     var actions by remember { mutableStateOf(false) }
 
     // Opening the page is recorded as a metadata view, never as a full read.
@@ -173,7 +165,7 @@ fun ArticleScreen(ctx: AppContext, nav: NavHostController, id: Long) {
                     HorizontalDivider(thickness = 1.dp, color = colors.rule)
                     Row(Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = Space.m), horizontalArrangement = Arrangement.spacedBy(Space.m)) {
                         PrimaryButton("Read at ${hostOf(a.url)}", { ctx.openOriginal(a) }, Modifier.weight(1f), icon = Icons.AutoMirrored.Outlined.OpenInNew)
-                        if (a.excerpt.isNotBlank()) SecondaryButton("Ask", { asking = true }, icon = Icons.Outlined.AutoAwesome)
+                        if (a.excerpt.isNotBlank()) SecondaryButton("Ask", { nav.navigate(Routes.ask(id)) }, icon = Icons.Outlined.AutoAwesome)
                     }
                 }
             }
@@ -181,67 +173,4 @@ fun ArticleScreen(ctx: AppContext, nav: NavHostController, id: Long) {
     }
 
     if (actions && a != null) ActionSheet(a.title, storyActions(ctx, a).drop(1), { actions = false })
-    if (asking && a != null) AskSheet(ctx, id, a.title, a.excerpt) { asking = false }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun AskSheet(ctx: AppContext, id: Long, title: String, excerpt: String, onDismiss: () -> Unit) {
-    var question by remember { mutableStateOf("") }
-    var answer by remember { mutableStateOf<AiAnswer?>(null) }
-    var working by remember { mutableStateOf(false) }
-
-    fun ask(task: AiTask, label: String) {
-        working = true
-        ctx.quick {
-            try {
-                val r = ctx.router.run(task, TaskInput((title + "\n\n" + excerpt).trim(), question))
-                if (task == AiTask.Summarization) ctx.library.recordEvent(id, ReadingEvent.SummaryOpen, System.currentTimeMillis())
-                answer = when (val o = r.output) {
-                    is TaskOutput.Cited -> AiAnswer(label, provenance(r), o.sentences.map { it.text to it.quote }.ifEmpty { listOf("The excerpt does not answer this." to null) }, o.notice)
-                    is TaskOutput.Labels -> AiAnswer(label, provenance(r), listOf(o.labels.joinToString().ifEmpty { "No matching topics" } to null), o.notice)
-                    is TaskOutput.Score -> AiAnswer(label, provenance(r), listOf("Relevance %.2f — %s".format(o.score, o.reason) to null), null)
-                    is TaskOutput.Vectors -> AiAnswer(label, provenance(r), listOf("${o.dimensions}-dimension vector" to null), null)
-                }
-                null
-            } finally { working = false }
-        }
-    }
-
-    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = colors.paperRaised) {
-        Column(Modifier.navigationBarsPadding().padding(horizontal = Space.xxl).padding(bottom = Space.xxl), verticalArrangement = Arrangement.spacedBy(Space.m)) {
-            Text("Ask about this excerpt", style = TypeRole.headline, color = colors.ink)
-            Text("Answers quote the excerpt and are checked against it. They use your Summaries and Q&A models, or built-in rules.",
-                style = TypeRole.meta.copy(fontWeight = TypeRole.ui.fontWeight), color = colors.inkMuted)
-            SecondaryButton("Summarize", { ask(AiTask.Summarization, "Summary") }, enabled = !working, icon = Icons.Outlined.AutoAwesome)
-            OutlinedTextField(
-                question, { question = it }, placeholder = { Text("Ask a question", style = TypeRole.ui) }, textStyle = TypeRole.ui, singleLine = true,
-                shape = RoundedCornerShape(Radius.control), modifier = Modifier.fillMaxWidth(),
-                trailingIcon = {
-                    IconButton(onClick = { ask(AiTask.QA, "Answer") }, enabled = !working && question.isNotBlank()) {
-                        Icon(Icons.Outlined.QuestionAnswer, contentDescription = "Ask", tint = if (question.isNotBlank()) colors.evergreen else colors.inkFaint)
-                    }
-                },
-            )
-            if (working) Row(verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = colors.evergreen); Spacer(Modifier.width(Space.m))
-                Text("Reading the excerpt…", style = TypeRole.ui, color = colors.inkMuted)
-            }
-            answer?.let { r ->
-                Column(
-                    Modifier.fillMaxWidth().background(colors.paperSunk, RoundedCornerShape(Radius.control)).padding(Space.l),
-                    verticalArrangement = Arrangement.spacedBy(Space.s),
-                ) {
-                    Kicker(r.title, color = colors.evergreen)
-                    r.lines.forEach { (text, quote) ->
-                        Text(text, style = TypeRole.ui, color = colors.ink)
-                        quote?.takeIf { it != text }?.let { QuoteBlock(it, null, serif = true) }
-                    }
-                    Text(r.provenance, style = TypeRole.meta, color = colors.inkMuted)
-                    r.notice?.let { Text(it, style = TypeRole.meta.copy(fontWeight = TypeRole.ui.fontWeight), color = colors.inkMuted) }
-                }
-            }
-            TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End)) { Text("Done", style = TypeRole.title, color = colors.evergreen) }
-        }
-    }
 }
