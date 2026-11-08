@@ -9,6 +9,9 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.hasScrollAction
+import androidx.compose.ui.test.hasText
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.samacharam.core.ContentType
@@ -67,10 +70,21 @@ class ScreensTest {
     private fun waitFor(text: String, timeout: Long = 20_000) =
         rule.waitUntil(timeout) { rule.onAllNodesWithText(text, substring = true, ignoreCase = true).fetchSemanticsNodes().isNotEmpty() }
 
+    /** Lazy lists only compose visible rows, so scroll any scrollable container to the item first. */
+    private fun reveal(text: String) {
+        val matcher = hasText(text, substring = true, ignoreCase = true)
+        if (rule.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty()) return
+        val scrollables = rule.onAllNodes(hasScrollAction())
+        for (i in 0 until scrollables.fetchSemanticsNodes().size) {
+            if (runCatching { scrollables[i].performScrollToNode(matcher) }.isSuccess) return
+        }
+    }
+
     private fun tap(text: String) {
+        reveal(text)
         waitFor(text)
         val node = rule.onAllNodesWithText(text, ignoreCase = true)[0]
-        runCatching { node.performScrollTo() } // items below the fold must be on screen to receive the click
+        runCatching { node.performScrollTo() }
         node.performClick(); rule.waitForIdle()
     }
 
@@ -94,7 +108,7 @@ class ScreensTest {
     }
 
     /** Back to Profile, waiting for the transition to finish before the next tap. */
-    private fun backToProfile() { tapIcon("Back"); waitFor("Your reading space") }
+    private fun backToProfile() { tapIcon("Back"); waitFor("Settings and data") }
 
     @Test fun walkThroughTheApp() = try { walk() } catch (e: Throwable) { screenshot("error-state"); throw e }
 
@@ -111,20 +125,19 @@ class ScreensTest {
         // Today with real feeds.
         waitFor("Your briefing")
         tapIcon("Refresh")
-        // The briefing card is at the top, so it is on screen; list headers further down may not be composed yet.
-        try { waitFor("Start reading", 90_000) } catch (e: Throwable) { screenshot("error-today"); throw e }
+        try { waitFor("Read next", 90_000) } catch (e: Throwable) { screenshot("error-today"); throw e }
         screenshot("03-today")
-        tap("Start reading")
-        waitFor("Ask about this excerpt")
+        tap("Read next")
+        waitFor("Your note")
         screenshot("04-article")
         tapIcon("Back")
 
-        tap("Explore"); waitFor("Browse your topics"); screenshot("05-explore")
-        tap("Library"); waitFor("Saved"); screenshot("06-library")
-        tap("Interests"); waitFor("Daily reading budget"); screenshot("07-interests")
-        tap("Profile"); waitFor("Your reading space"); screenshot("08-profile")
+        tap("Explore"); waitFor("Your topics"); screenshot("05-explore")
+        tap("Library"); waitFor("Kept for later"); screenshot("06-library")
+        tap("Interests"); waitFor("What you follow"); screenshot("07-interests")
+        tap("Profile"); waitFor("Settings and data"); screenshot("08-profile")
         tap("Model connections"); waitFor("Privacy and cost"); screenshot("09-models"); backToProfile()
-        tap("Backup & sync"); waitFor("How it works"); screenshot("10-sync"); backToProfile()
+        tap("Backup and sync"); waitFor("How it works"); screenshot("10-sync"); backToProfile()
         tap("Sources"); waitFor("active sources healthy"); screenshot("11-sources"); backToProfile()
         tap("Appearance"); tap("Dark"); waitFor("Use wallpaper colors"); screenshot("12-appearance-dark"); backToProfile()
         tap("Today"); waitFor("Your briefing"); screenshot("13-today-dark")

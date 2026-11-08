@@ -446,6 +446,9 @@ class Library(private val db: SqlDriver) {
             .take(limit).map { it.first }.toList()
     }
 
+    /** Items the owner has opened in any way; everything else counts as unread. */
+    fun seenIds(): Set<Long> = db.query("SELECT DISTINCT article_id FROM history") { it.long(0)!! }.toSet()
+
     fun readIds(): Set<Long> =
         db.query("SELECT DISTINCT article_id FROM history WHERE kind=?", listOf(ReadingEvent.MarkRead.code)) { it.long(0)!! }.toSet()
 

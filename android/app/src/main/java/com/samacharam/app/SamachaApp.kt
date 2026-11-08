@@ -66,7 +66,17 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.samacharam.app.ui.Motion
 import com.samacharam.app.ui.SamachaTheme
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsTopHeight
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import com.samacharam.app.ui.ThemeMode
 import com.samacharam.core.Article
 import com.samacharam.core.FeedbackReason
@@ -184,13 +194,20 @@ private fun AppNavigation(ctx: AppContext, startOnboarding: Boolean) {
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     val showBar = TOP_LEVEL.any { it.route == route }
+    val rule = com.samacharam.app.ui.colors.rule
+    val navColors = androidx.compose.material3.NavigationBarItemDefaults.colors(
+        selectedIconColor = com.samacharam.app.ui.colors.evergreen, selectedTextColor = com.samacharam.app.ui.colors.ink,
+        indicatorColor = com.samacharam.app.ui.colors.evergreenSoft,
+        unselectedIconColor = com.samacharam.app.ui.colors.inkMuted, unselectedTextColor = com.samacharam.app.ui.colors.inkMuted,
+    )
 
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             AnimatedVisibility(showBar, enter = slideInVertically { it } + fadeIn(), exit = slideOutVertically { it } + fadeOut()) {
-                NavigationBar {
+                NavigationBar(containerColor = com.samacharam.app.ui.colors.paper, tonalElevation = 0.dp,
+                    modifier = Modifier.drawBehind { drawLine(rule, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }) {
                     TOP_LEVEL.forEach { item ->
                         val selected = route == item.route
                         NavigationBarItem(
@@ -203,7 +220,8 @@ private fun AppNavigation(ctx: AppContext, startOnboarding: Boolean) {
                                 }
                             },
                             icon = { Icon(if (selected) item.selected else item.unselected, contentDescription = null) },
-                            label = { Text(item.label) },
+                            label = { Text(item.label, style = com.samacharam.app.ui.TypeRole.meta) },
+                            colors = navColors,
                         )
                     }
                 }
@@ -213,10 +231,15 @@ private fun AppNavigation(ctx: AppContext, startOnboarding: Boolean) {
         NavHost(
             nav, startDestination = if (startOnboarding) Routes.ONBOARDING else Routes.TODAY,
             modifier = Modifier.padding(padding),
-            enterTransition = { if (initialState.destination.route in TOP_LEVEL.map { it.route } && targetState.destination.route in TOP_LEVEL.map { it.route }) fadeIn() else slideInHorizontally { it / 4 } + fadeIn() },
-            exitTransition = { fadeOut() },
-            popEnterTransition = { fadeIn() },
-            popExitTransition = { slideOutHorizontally { it / 4 } + fadeOut() },
+            // Tabs crossfade; detail pages rise 24 dp and fade in (Motion tokens).
+            enterTransition = {
+                val tabs = TOP_LEVEL.map { it.route }
+                if (initialState.destination.route in tabs && targetState.destination.route in tabs) fadeIn(tween(Motion.STANDARD))
+                else slideInVertically(tween(Motion.STANDARD, easing = Motion.EmphasizedDecelerate)) { 72 } + fadeIn(tween(Motion.STANDARD))
+            },
+            exitTransition = { fadeOut(tween(Motion.EXIT)) },
+            popEnterTransition = { fadeIn(tween(Motion.STANDARD)) },
+            popExitTransition = { slideOutVertically(tween(Motion.EXIT, easing = Motion.EmphasizedAccelerate)) { 72 } + fadeOut(tween(Motion.EXIT)) },
         ) {
             composable(Routes.ONBOARDING) { OnboardingScreen(ctx) { nav.navigate(Routes.TODAY) { popUpTo(Routes.ONBOARDING) { inclusive = true } } } }
             composable(Routes.TODAY) { TodayScreen(ctx, nav) }
@@ -245,36 +268,69 @@ private fun AppNavigation(ctx: AppContext, startOnboarding: Boolean) {
 }
 
 /**
- * Standard page: collapsing large title, optional back arrow, actions, and the busy indicator.
- * Top-level tabs leave the bottom inset to the navigation bar; detail pages pad for the system bar.
+ * Detail and settings page: a slim bar with Back and the title, then content.
+ * ([large] is kept for call-site compatibility; all detail pages use the compact bar.)
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppPage(
     ctx: AppContext,
     title: String,
     nav: NavHostController? = null,
-    large: Boolean = true,
+    @Suppress("UNUSED_PARAMETER") large: Boolean = true,
     actions: @Composable RowScope.() -> Unit = {},
     floating: @Composable () -> Unit = {},
     content: @Composable (PaddingValues) -> Unit,
 ) {
-    val behavior = if (large) TopAppBarDefaults.exitUntilCollapsedScrollBehavior() else TopAppBarDefaults.pinnedScrollBehavior()
-    val back: @Composable () -> Unit = {
-        if (nav != null) IconButton(onClick = { nav.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back") }
-    }
     Scaffold(
-        modifier = Modifier.nestedScroll(behavior.nestedScrollConnection),
+        containerColor = com.samacharam.app.ui.colors.paper,
         contentWindowInsets = if (nav != null) WindowInsets.navigationBars else WindowInsets(0),
         floatingActionButton = floating,
         topBar = {
-            if (large) LargeTopAppBar(title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigationIcon = back, actions = actions, scrollBehavior = behavior)
-            else TopAppBar(title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) }, navigationIcon = back, actions = actions, scrollBehavior = behavior)
+            Column {
+                com.samacharam.app.ui.CompactBar(title, visible = true, onBack = nav?.let { n -> { n.popBackStack() } }, actions = actions)
+                BusyLine(ctx)
+            }
         },
-    ) { padding ->
-        androidx.compose.foundation.layout.Box(Modifier.fillMaxSize()) {
-            content(padding)
-            if (ctx.busy) LinearProgressIndicator(Modifier.padding(top = padding.calculateTopPadding()).fillMaxWidth())
+    ) { padding -> content(padding) }
+}
+
+@Composable
+fun BusyLine(ctx: AppContext) {
+    Box(Modifier.fillMaxWidth().height(2.dp)) {
+        AnimatedVisibility(ctx.busy, enter = fadeIn(), exit = fadeOut()) {
+            LinearProgressIndicator(Modifier.fillMaxWidth(), color = com.samacharam.app.ui.colors.evergreen, trackColor = com.samacharam.app.ui.colors.rule)
+        }
+    }
+}
+
+/**
+ * Top-level tab: the masthead scrolls away with the list and a compact bar fades in once it has.
+ */
+@Composable
+fun TabPage(
+    ctx: AppContext,
+    kicker: String,
+    title: String,
+    status: String? = null,
+    listState: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
+    actions: @Composable RowScope.() -> Unit = {},
+    floating: @Composable () -> Unit = {},
+    content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit,
+) {
+    val collapsed by remember { androidx.compose.runtime.derivedStateOf { listState.firstVisibleItemIndex > 0 } }
+    Scaffold(containerColor = com.samacharam.app.ui.colors.paper, contentWindowInsets = WindowInsets(0), floatingActionButton = floating) { padding ->
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            androidx.compose.foundation.lazy.LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
+                item(key = "masthead") { com.samacharam.app.ui.Masthead(kicker, title, status, actions) }
+                content()
+            }
+            Column {
+                AnimatedVisibility(collapsed, enter = fadeIn(), exit = fadeOut()) {
+                    com.samacharam.app.ui.CompactBar(title, visible = true, onBack = null, actions = actions)
+                }
+                if (!collapsed) Spacer(Modifier.windowInsetsTopHeight(WindowInsets.statusBars))
+                BusyLine(ctx)
+            }
         }
     }
 }
@@ -283,7 +339,7 @@ fun AppPage(
 @Composable
 fun PageColumn(padding: PaddingValues, content: @Composable ColumnScope.() -> Unit) {
     androidx.compose.foundation.layout.Column(
-        Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(bottom = 96.dp), // clears floating buttons
+        Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(top = com.samacharam.app.ui.Space.s, bottom = 96.dp), // clears floating buttons
         content = content,
     )
 }
