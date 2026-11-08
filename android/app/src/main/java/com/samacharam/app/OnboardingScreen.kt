@@ -52,8 +52,6 @@ private val SUGGESTED = listOf("LLMs", "NLP", "Software", "Hardware", "AI audio"
 @Composable
 fun OnboardingScreen(ctx: AppContext, done: () -> Unit) {
     var step by remember { mutableIntStateOf(0) }
-    androidx.compose.runtime.DisposableEffect(Unit) { android.util.Log.i("samacharam", "onboarding entered"); onDispose { android.util.Log.i("samacharam", "onboarding left") } }
-    androidx.compose.runtime.SideEffect { android.util.Log.i("samacharam", "onboarding step=$step") }
     val current by rememberLoaded(ctx) { ctx.library.profile().topics }
     var core by remember(current) { mutableStateOf(current.orEmpty().filterValues { it == Layer.Core }.keys) }
     var near by remember(current) { mutableStateOf(current.orEmpty().filterValues { it == Layer.Near }.keys) }
@@ -99,7 +97,7 @@ fun OnboardingScreen(ctx: AppContext, done: () -> Unit) {
                         1 -> {
                             Hero(Icons.Outlined.Tune)
                             Text("What do you follow?", style = MaterialTheme.typography.headlineMedium)
-                            Text("Core topics lead your feed. Tap once for Core, again for Near, a third time to clear. You can change this anytime in Interests.", style = MaterialTheme.typography.bodyMedium)
+                            Text("Core topics lead your feed. Tap once for Core, again for Near, a third time to clear. You can change this anytime on your Profile.", style = MaterialTheme.typography.bodyMedium)
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 (current.orEmpty().keys + SUGGESTED).distinct().forEach { t ->
                                     val label = when (t) { in core -> "$t · Core"; in near -> "$t · Near"; else -> t }
@@ -114,7 +112,7 @@ fun OnboardingScreen(ctx: AppContext, done: () -> Unit) {
                             Text("Your data, your choice", style = MaterialTheme.typography.headlineMedium)
                             SettingRow("On this phone", Icons.Outlined.PhoneAndroid, "The default. Works offline, no account needed.")
                             SettingRow("Google Drive sync, later", Icons.Outlined.CloudSync, "Encrypted with your passphrase. Turn it on anytime in Profile → Backup & sync.")
-                            Text("Five public research feeds are ready to go. Pull down on Today to fetch the latest.", style = MaterialTheme.typography.bodyMedium)
+                            Text("Five public research feeds are ready to go. Pull down on Home to fetch the latest.", style = MaterialTheme.typography.bodyMedium)
                         }
                     }
                 }

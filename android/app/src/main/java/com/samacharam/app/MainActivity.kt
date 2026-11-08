@@ -14,7 +14,6 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         ctx = AppContext(this)
-        android.util.Log.i("samacharam", "activity created, restored=${savedInstanceState != null}")
         // Earlier versions scheduled a briefing that called the computer host; the phone library replaces it.
         WorkManager.getInstance(this).cancelUniqueWork("daily-briefing")
         if (savedInstanceState == null) handleShare(intent)

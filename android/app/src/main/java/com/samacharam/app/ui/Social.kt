@@ -78,12 +78,13 @@ fun typeLabel(type: ContentType) = when (type) {
     ContentType.Paper -> "Paper"; ContentType.Blog -> "Blog"; ContentType.News -> "News"; ContentType.Article -> "Link"
 }
 
-/** Up to two initials from a name: "Hugging Face" → "HF", "arXiv" → "AR". */
+/** Short label for an avatar: "Hugging Face" → "HF", "NLP" → "NLP", "Software" → "S", "arXiv · AI" → "AA". */
 fun initials(name: String): String {
-    val words = name.split(' ', '-', '.', '_').filter { it.isNotBlank() }
+    val words = name.split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotBlank() }
     return when {
         words.isEmpty() -> "·"
-        words.size == 1 -> words[0].take(2).uppercase()
+        words.size == 1 && words[0].length <= 4 -> words[0]
+        words.size == 1 -> words[0].take(1).uppercase()
         else -> (words[0].take(1) + words[1].take(1)).uppercase()
     }
 }

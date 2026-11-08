@@ -124,7 +124,6 @@ fun ProfileScreen(ctx: AppContext, nav: NavHostController) {
                         }
                     }
                     Spacer(Modifier.height(Space.m))
-                    Text(d.name, style = TypeRole.title, color = colors.ink)
                     val core = d.topics.filter { it.second == Layer.Core }.take(3).joinToString(" · ") { it.first }
                     Text(
                         listOfNotNull(core.ifBlank { null },
