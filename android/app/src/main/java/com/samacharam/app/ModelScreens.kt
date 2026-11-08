@@ -51,6 +51,12 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.samacharam.app.ui.Pill
+import com.samacharam.app.ui.Radius
+import com.samacharam.app.ui.Space
+import com.samacharam.app.ui.colors
+import com.samacharam.app.ui.TypeRole
 import com.samacharam.app.ui.ConfirmDialog
 import com.samacharam.app.ui.MenuRow
 import com.samacharam.app.ui.SectionHeader
@@ -94,12 +100,13 @@ fun ModelsScreen(ctx: AppContext, nav: NavHostController) {
     val keyed by rememberLoaded(ctx) { ctx.library.aiSettings().providers.filter { ctx.secrets.get(it.id) != null }.map { it.id }.toSet() }
     var removing by remember { mutableStateOf<ProviderConfig?>(null) }
     AppPage(ctx, "Model connections", nav = nav, floating = {
-        ExtendedFloatingActionButton(onClick = { nav.navigate(Routes.ADD_MODEL) }, icon = { Icon(Icons.Outlined.Add, null) }, text = { Text("Add model") })
+        ExtendedFloatingActionButton(onClick = { nav.navigate(Routes.ADD_MODEL) }, icon = { Icon(Icons.Outlined.Add, null) }, text = { Text("Add model", style = TypeRole.title) },
+            containerColor = colors.evergreen, contentColor = colors.onEvergreen)
     }) { padding ->
         val s = settings ?: return@AppPage
         PageColumn(padding) {
             Text("Recommendations use rules you control. Optionally connect a model per task — on this phone, on your own computer, or a cloud API with your key.",
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp))
+                style = TypeRole.ui, color = colors.inkMuted, modifier = Modifier.padding(horizontal = Space.gutter))
             SectionHeader("Privacy and cost")
             SettingsGroup {
                 SwitchRow("Local only", s.policy.localOnly, Icons.Outlined.CloudOff, "Block every cloud model before any text is sent") { on ->
@@ -117,7 +124,7 @@ fun ModelsScreen(ctx: AppContext, nav: NavHostController) {
                     var text by remember { mutableStateOf(s.policy.dailyCloudRequests.toString()) }
                     androidx.compose.material3.AlertDialog(
                         onDismissRequest = { editing = false }, title = { Text("Daily cloud request limit") },
-                        text = { OutlinedTextField(text, { text = it.filter(Char::isDigit).take(6) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)) },
+                        text = { OutlinedTextField(text, { text = it.filter(Char::isDigit).take(6) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number), shape = RoundedCornerShape(Radius.control), colors = formFieldColors()) },
                         confirmButton = { TextButton(onClick = { editing = false; val n = text.toIntOrNull() ?: 100; ctx.quick { ctx.library.saveAiSettings(s.copy(policy = s.policy.copy(dailyCloudRequests = n))); "Limit set to $n per day" } }) { Text("Save") } },
                         dismissButton = { TextButton(onClick = { editing = false }) { Text("Cancel") } },
                     )
@@ -130,8 +137,8 @@ fun ModelsScreen(ctx: AppContext, nav: NavHostController) {
                     onClick = { nav.navigate(Routes.ROUTES) })
             }
             SectionHeader("Connected models")
-            if (s.providers.isEmpty()) Text("None yet — tap Add model.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp))
-            SettingsGroup {
+            if (s.providers.isEmpty()) Text("None yet. Tap Add model to connect one.", style = TypeRole.ui, color = colors.inkMuted, modifier = Modifier.padding(horizontal = Space.gutter))
+            if (s.providers.isNotEmpty()) SettingsGroup {
                 s.providers.forEach { p ->
                     var menu by remember { mutableStateOf(false) }
                     val (icon, where) = p.where()
@@ -178,14 +185,14 @@ private fun DeviceModelImport(ctx: AppContext) {
         if (uri != null) { val b = bundle; val f = file; ctx.run { val hash = ctx.device.importFile(uri, b, f); "Imported $f into $b (sha256 ${hash.take(12)}…)" } }
     }
     SectionHeader("On-device model files")
-    Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        OutlinedTextField(bundle, { bundle = it }, label = { Text("Bundle name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+    Column(Modifier.padding(horizontal = Space.gutter), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        OutlinedTextField(bundle, { bundle = it }, label = { Text("Bundle name") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.control), colors = formFieldColors())
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            listOf("model.litertlm", "model.onnx", "vocab.txt", "config.json").forEach { f -> FilterChip(file == f, { file = f }, { Text(f) }) }
+            listOf("model.litertlm", "model.onnx", "vocab.txt", "config.json").forEach { f -> Pill(f, file == f, { file = f }) }
         }
         OutlinedButton(onClick = { picker.launch(arrayOf("*/*")) }, enabled = !ctx.busy) { Icon(Icons.Outlined.UploadFile, null); Text("  Choose file") }
         Text("LiteRT-LM (.litertlm) handles summaries, answers, and evidence drafts. ONNX needs model.onnx, vocab.txt, and config.json from an uncased BERT model. Check each model's license.",
-            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            style = TypeRole.meta, color = colors.inkMuted)
     }
 }
 
@@ -208,13 +215,13 @@ fun RoutesScreen(ctx: AppContext, nav: NavHostController) {
         val s = settings ?: return@AppPage
         PageColumn(padding) {
             Text("Each task uses its primary model, then its fallback if that fails. Built-in rules are free and offline; semantic search, reranking, and evidence drafts need a model.",
-                style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 16.dp))
+                style = TypeRole.ui, color = colors.inkMuted, modifier = Modifier.padding(horizontal = Space.gutter))
             AiTask.entries.forEach { task ->
                 val route = s.route(task)
                 val options = listOf(BUILTIN to "Built-in rules") + s.providers.filter { task in it.capabilities }.map { it.id to it.name }
                 fun name(id: String?) = options.firstOrNull { it.first == id }?.second ?: "none"
                 SectionHeader(TASK_LABELS.getValue(task))
-                FlowRow(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(Modifier.padding(horizontal = Space.gutter), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Dropdown("Primary", name(route.primary), options) { id -> ctx.quick { ctx.library.saveAiSettings(s.withRoute(task, Route(id, route.fallback?.takeIf { it != id }))); null } }
                     Dropdown("Fallback", name(route.fallback), listOf<Pair<String?, String>>(null to "none") + options.filter { it.first != route.primary }) { id ->
                         ctx.quick { ctx.library.saveAiSettings(s.withRoute(task, Route(route.primary, id))); null }
@@ -238,33 +245,33 @@ fun AddModelScreen(ctx: AppContext, nav: NavHostController) {
     var allowCloud by remember { mutableStateOf(false) }
     AppPage(ctx, "Add model", nav = nav) { padding ->
         PageColumn(padding) {
-            Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text("Type", style = MaterialTheme.typography.labelLarge)
+            Column(Modifier.padding(horizontal = Space.gutter), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text("Type", style = TypeRole.title, color = colors.ink)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Protocol.entries.forEach { p -> FilterChip(protocol == p, { protocol = p; tasks = tasks intersect p.supports }, { Text(PROTOCOL_LABELS.getValue(p)) }) }
+                    Protocol.entries.forEach { p -> Pill(PROTOCOL_LABELS.getValue(p), protocol == p, { protocol = p; tasks = tasks intersect p.supports }) }
                 }
-                OutlinedTextField(name, { name = it }, label = { Text("Display name") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(name, { name = it }, label = { Text("Display name") }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.control), colors = formFieldColors())
                 if (protocol.onDevice) {
                     Dropdown("Bundle", model.ifBlank { "choose" }, bundles.orEmpty().map { it to it }) { model = it }
-                    if (bundles.isNullOrEmpty()) Text("Import a model bundle on the previous screen first.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                    if (bundles.isNullOrEmpty()) Text("Import a model bundle on the previous screen first.", style = TypeRole.meta, color = colors.danger)
                 } else {
                     OutlinedTextField(model, { model = it }, singleLine = true, modifier = Modifier.fillMaxWidth(),
-                        label = { Text(if (protocol == Protocol.Ollama) "Model name, e.g. llama3.2" else "Model ID from the provider") })
+                        label = { Text(if (protocol == Protocol.Ollama) "Model name, e.g. llama3.2" else "Model ID from the provider") }, shape = RoundedCornerShape(Radius.control), colors = formFieldColors())
                     OutlinedTextField(endpoint, { endpoint = it.trim() }, singleLine = true, modifier = Modifier.fillMaxWidth(),
                         label = { Text("Endpoint") },
                         placeholder = { Text(defaultEndpoint(protocol) ?: if (protocol == Protocol.Ollama) "http://192.168.1.20:11434" else "https://api.openai.com/v1") },
-                        supportingText = { defaultEndpoint(protocol)?.let { Text("Leave empty to use $it") } })
+                        supportingText = { defaultEndpoint(protocol)?.let { Text("Leave empty to use $it") } }, shape = RoundedCornerShape(Radius.control), colors = formFieldColors())
                     OutlinedTextField(key, { key = it }, label = { Text("API key") }, singleLine = true, leadingIcon = { Icon(Icons.Outlined.Key, null) },
                         visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth(),
-                        supportingText = { Text("Stored only in this phone's Android Keystore. Optional for local servers.") })
+                        supportingText = { Text("Stored only in this phone's Android Keystore. Optional for local servers.") }, shape = RoundedCornerShape(Radius.control), colors = formFieldColors())
                 }
-                Text("Tasks", style = MaterialTheme.typography.labelLarge)
+                Text("Tasks", style = TypeRole.title, color = colors.ink)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    protocol.supports.sortedBy { it.ordinal }.forEach { t -> FilterChip(t in tasks, { tasks = if (t in tasks) tasks - t else tasks + t }, { Text(TASK_LABELS.getValue(t)) }) }
+                    protocol.supports.sortedBy { it.ordinal }.forEach { t -> Pill(TASK_LABELS.getValue(t), t in tasks, { tasks = if (t in tasks) tasks - t else tasks + t }) }
                 }
                 if (!protocol.onDevice) Row(verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(allowCloud, { allowCloud = it })
-                    Text("If this is a cloud service, I allow sending article text to it.", style = MaterialTheme.typography.bodyMedium)
+                    Text("If this is a cloud service, I allow sending article text to it.", style = TypeRole.ui, color = colors.ink)
                 }
                 Button(onClick = {
                     val config = ProviderConfig(UUID.randomUUID().toString(), name.trim(), protocol, model.trim(), endpoint.ifBlank { null }, tasks, allowCloud = allowCloud)
@@ -276,7 +283,7 @@ fun AddModelScreen(ctx: AppContext, nav: NavHostController) {
                     }
                 }, enabled = name.isNotBlank() && model.isNotBlank() && tasks.isNotEmpty() && !ctx.busy, modifier = Modifier.fillMaxWidth()) { Text("Save model") }
                 Text("Plain http:// is accepted only for devices on your own network. Cloud endpoints must use HTTPS.",
-                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    style = TypeRole.meta, color = colors.inkMuted)
             }
         }
     }

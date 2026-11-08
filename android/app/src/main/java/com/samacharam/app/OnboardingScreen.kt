@@ -101,9 +101,9 @@ fun OnboardingScreen(ctx: AppContext, done: () -> Unit) {
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 (current.orEmpty().keys + SUGGESTED).distinct().forEach { t ->
                                     val label = when (t) { in core -> "$t · Core"; in near -> "$t · Near"; else -> t }
-                                    FilterChip(t in core || t in near, {
+                                    com.samacharam.app.ui.Pill(label, t in core || t in near, {
                                         when (t) { in core -> { core = core - t; near = near + t }; in near -> near = near - t; else -> core = core + t }
-                                    }, { Text(label) })
+                                    })
                                 }
                             }
                         }

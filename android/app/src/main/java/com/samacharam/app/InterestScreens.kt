@@ -117,7 +117,6 @@ fun InterestsScreen(ctx: AppContext, nav: NavHostController) {
                 ) {
                     LayerMark(layer, 12.dp); Spacer(Modifier.width(Space.m))
                     Text(topic, style = TypeRole.story, color = colors.ink, modifier = Modifier.weight(1f))
-                    Text(layer.name, style = TypeRole.meta, color = colors.inkMuted)
                     Icon(Icons.Outlined.ChevronRight, null, tint = colors.inkFaint)
                 }
                 Hairline()

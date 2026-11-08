@@ -25,7 +25,7 @@ private fun Palette.scheme() = (if (isDark) darkColorScheme() else lightColorSch
     surfaceContainerLowest = paperRaised, surfaceContainerLow = paperRaised, surfaceContainer = paperRaised,
     surfaceContainerHigh = paperSunk, surfaceContainerHighest = paperSunk, surfaceBright = paperRaised, surfaceDim = paperSunk,
     inverseSurface = ink, inverseOnSurface = paper, inversePrimary = evergreenSoft,
-    outline = inkFaint, outlineVariant = rule, error = danger, onError = paper, errorContainer = paperSunk, onErrorContainer = danger,
+    outline = inkFaint, outlineVariant = rule, error = danger, onError = paper, errorContainer = dangerSoft, onErrorContainer = danger,
     scrim = ink,
 )
 

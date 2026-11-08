@@ -185,7 +185,7 @@ fun TodayScreen(ctx: AppContext, nav: NavHostController) {
             item(key = "briefing-start") {
                 Column(Modifier.padding(horizontal = Space.gutter), verticalArrangement = Arrangement.spacedBy(Space.m)) {
                     LinearProgressIndicator(
-                        progress = { readCount.toFloat() / q.articles.size }, color = colors.saffron, trackColor = colors.rule,
+                        progress = { readCount.toFloat() / q.articles.size }, color = colors.saffron, trackColor = colors.rule, gapSize = 0.dp, drawStopIndicator = {},
                         modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp))
                             .semantics { contentDescription = "$readCount of ${q.articles.size} briefing stories read" },
                     )

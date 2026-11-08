@@ -3,6 +3,7 @@ package com.samacharam.app
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -34,6 +35,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import androidx.compose.foundation.shape.RoundedCornerShape
+import com.samacharam.app.ui.Pill
+import com.samacharam.app.ui.Radius
+import com.samacharam.app.ui.Space
+import com.samacharam.app.ui.colors
+import com.samacharam.app.ui.TypeRole
 import com.samacharam.app.ui.ConfirmDialog
 import com.samacharam.app.ui.SectionHeader
 import com.samacharam.app.ui.SettingRow
@@ -66,22 +73,22 @@ fun SyncScreen(ctx: AppContext, nav: NavHostController) {
     AppPage(ctx, "Backup & sync", nav = nav) { padding ->
         val (enabled, lastSync, error) = info ?: return@AppPage
         PageColumn(padding) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = if (enabled) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh),
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            // Status block built from tokens: storage mode first, then the one action that changes it.
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = Space.l).background(if (enabled) colors.evergreenSoft else colors.paperSunk, RoundedCornerShape(Radius.control))
+                    .padding(Space.xl),
+                verticalArrangement = Arrangement.spacedBy(Space.s),
             ) {
-                Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(if (enabled) Icons.Outlined.CloudDone else Icons.Outlined.PhoneAndroid, null)
-                    Text(if (enabled) "Syncing with Google Drive" else "Stored only on this phone", style = MaterialTheme.typography.titleLarge)
-                    Text(
-                        if (enabled) "Last sync ${lastSync?.let(::timeAgo) ?: "not yet"}. Sync also runs with the hourly background refresh."
-                        else "Back up to a hidden app folder in your Google Drive and keep several phones in sync.",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    if (!enabled) Button(onClick = {
-                        withToken { t -> token = t; ctx.run { dialog = if (PhoneSync.engine(ctx.activity, t).backupExists()) SyncDialog.Unlock else SyncDialog.Create; null } }
-                    }, enabled = !ctx.busy) { Text("Set up Google Drive sync") }
-                }
+                Icon(if (enabled) Icons.Outlined.CloudDone else Icons.Outlined.PhoneAndroid, null, tint = if (enabled) colors.evergreen else colors.inkMuted)
+                Text(if (enabled) "Syncing with Google Drive" else "Stored only on this phone", style = TypeRole.headline, color = colors.ink)
+                Text(
+                    if (enabled) "Last sync ${lastSync?.let(::timeAgo) ?: "not yet"}. Sync also runs with the hourly background refresh."
+                    else "Back up to a hidden app folder in your Google Drive, encrypted with your passphrase, and keep phones in sync.",
+                    style = TypeRole.ui, color = colors.inkMuted,
+                )
+                if (!enabled) com.samacharam.app.ui.PrimaryButton("Set up Google Drive sync", {
+                    withToken { t -> token = t; ctx.run { dialog = if (PhoneSync.engine(ctx.activity, t).backupExists()) SyncDialog.Unlock else SyncDialog.Create; null } }
+                }, enabled = !ctx.busy)
             }
             error?.takeIf { enabled }?.let {
                 SettingsGroup { SettingRow("Last sync problem", Icons.Outlined.ErrorOutline, it) }
@@ -119,10 +126,10 @@ fun SyncScreen(ctx: AppContext, nav: NavHostController) {
                         Text(if (creating) "You need this passphrase to restore on another phone. If you lose it, the backup cannot be recovered — not by you, Google, or anyone."
                         else "A backup already exists in this Google account. Enter the passphrase you chose when you created it.")
                         OutlinedTextField(pass, { pass = it }, label = { Text("Passphrase (${SyncEngine.MIN_PASSPHRASE}+ characters)") },
-                            visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth())
+                            visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(Radius.control), colors = formFieldColors())
                         if (creating) OutlinedTextField(again, { again = it }, label = { Text("Repeat passphrase") },
                             visualTransformation = PasswordVisualTransformation(), singleLine = true, modifier = Modifier.fillMaxWidth(),
-                            isError = again.isNotEmpty() && again != pass)
+                            isError = again.isNotEmpty() && again != pass, shape = RoundedCornerShape(Radius.control), colors = formFieldColors())
                     }
                 },
                 confirmButton = {

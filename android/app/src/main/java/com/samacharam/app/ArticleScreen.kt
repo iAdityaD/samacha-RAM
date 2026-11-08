@@ -71,7 +71,6 @@ import com.samacharam.core.ai.Location
 import com.samacharam.core.ai.ModelResult
 import com.samacharam.core.ai.TaskInput
 import com.samacharam.core.ai.TaskOutput
-import com.samacharam.core.formatDate
 
 private data class AiAnswer(val title: String, val provenance: String, val lines: List<Pair<String, String?>>, val notice: String?)
 
@@ -112,7 +111,7 @@ fun ArticleScreen(ctx: AppContext, nav: NavHostController, id: Long) {
                     Kicker(listOf(a.type.name, a.topics.joinToString(" · ")).filter { it.isNotBlank() }.joinToString("  ·  "), color = colors.evergreen)
                     Text(a.title, style = TypeRole.headline, color = colors.ink, modifier = Modifier.semantics { heading() })
                     Text(
-                        listOfNotNull(a.authors.ifBlank { null }, a.published?.let(::formatDate) ?: "Date unknown", "${a.minutes} min read").joinToString(" · "),
+                        listOfNotNull(a.authors.ifBlank { null }, a.published?.let { java.text.DateFormat.getDateInstance(java.text.DateFormat.MEDIUM).format(java.util.Date(it)) } ?: "Date unknown", "${a.minutes} min read").joinToString(" · "),
                         style = TypeRole.meta, color = colors.inkMuted,
                     )
                     Row(verticalAlignment = Alignment.Top) {
