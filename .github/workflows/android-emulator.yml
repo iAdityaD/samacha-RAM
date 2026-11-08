@@ -32,10 +32,10 @@ jobs:
           target: google_apis
           disable-animations: true
           script: |
+            adb logcat -G 16M
             gradle -p android :app:connectedDebugAndroidTest --no-daemon || (adb logcat -d | grep -E "LIVE FEED|AndroidRuntime|samacharam|TestRunner" | tail -300; touch tests-failed)
             adb logcat -d | grep "LIVE FEED" || true
-            adb pull /sdcard/Android/data/com.samacharam.app/files/screens android-screens || true
-            for f in android-screens/*.png; do echo "SCREEN-BEGIN $(basename $f)"; base64 -w0 "$f"; echo; echo "SCREEN-END"; done || true
+            adb logcat -d -s SCREENSHOT:I | grep -o "SCREENSHOT.*" || true
             test ! -f tests-failed
       - uses: actions/upload-artifact@v4
         if: always()

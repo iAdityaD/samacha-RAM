@@ -62,21 +62,30 @@ class LiveFeedsTest {
 class ScreensTest {
     @get:Rule val rule = createAndroidComposeRule<MainActivity>()
 
+    // Section headers render in uppercase, so text matching ignores case.
     private fun waitFor(text: String, timeout: Long = 20_000) =
-        rule.waitUntil(timeout) { rule.onAllNodesWithText(text, substring = true).fetchSemanticsNodes().isNotEmpty() }
+        rule.waitUntil(timeout) { rule.onAllNodesWithText(text, substring = true, ignoreCase = true).fetchSemanticsNodes().isNotEmpty() }
 
-    private fun tap(text: String) { waitFor(text); rule.onAllNodesWithText(text)[0].performClick(); rule.waitForIdle() }
+    private fun tap(text: String) { waitFor(text); rule.onAllNodesWithText(text, ignoreCase = true)[0].performClick(); rule.waitForIdle() }
 
     private fun tapIcon(description: String) {
         rule.waitUntil(20_000) { rule.onAllNodesWithContentDescription(description).fetchSemanticsNodes().isNotEmpty() }
         rule.onAllNodesWithContentDescription(description)[0].performClick(); rule.waitForIdle()
     }
 
+    /**
+     * The test runner uninstalls the app afterwards (deleting its files), so screenshots are written to the
+     * log as half-size JPEG in base64 chunks; CI prints them for review.
+     */
     private fun screenshot(name: String) {
         rule.waitForIdle()
         Thread.sleep(600) // let transitions settle
-        val dir = File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null), "screens").apply { mkdirs() }
-        File(dir, "$name.png").outputStream().use { rule.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
+        val full = rule.onRoot().captureToImage().asAndroidBitmap()
+        val small = Bitmap.createScaledBitmap(full, full.width / 2, full.height / 2, true)
+        val bytes = java.io.ByteArrayOutputStream().also { small.compress(Bitmap.CompressFormat.JPEG, 82, it) }.toByteArray()
+        val data = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+        val chunks = data.chunked(3000)
+        chunks.forEachIndexed { i, c -> android.util.Log.i("SCREENSHOT", "$name ${i + 1}/${chunks.size} $c") }
     }
 
     @Test fun walkThroughTheApp() {
@@ -92,7 +101,7 @@ class ScreensTest {
         // Today with real feeds.
         waitFor("Your briefing")
         tapIcon("Refresh")
-        rule.waitUntil(90_000) { rule.onAllNodesWithText("Picked for your interests").fetchSemanticsNodes().isNotEmpty() }
+        waitFor("Picked for your interests", 90_000)
         screenshot("03-today")
         tap("Start reading")
         waitFor("Ask about this excerpt")
