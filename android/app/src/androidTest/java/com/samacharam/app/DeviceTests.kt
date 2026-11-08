@@ -90,3 +90,44 @@ class ScreensTest {
         screenshot("6-models")
     }
 }
+
+/** Sync encryption and merging on Android's own crypto providers (PBKDF2, AES-GCM), with an in-memory Drive. */
+@RunWith(AndroidJUnit4::class)
+class SyncOnAndroidTest {
+    private val context = InstrumentationRegistry.getInstrumentation().targetContext
+
+    private class MemoryDrive : com.samacharam.core.sync.RemoteStore {
+        val files = HashMap<String, ByteArray>()
+        override fun list() = files.keys.toList()
+        override fun read(name: String) = files[name]
+        override fun write(name: String, data: ByteArray) { files[name] = data }
+        override fun delete(name: String) { files.remove(name) }
+    }
+
+    private class MemoryKeys : com.samacharam.core.sync.SyncKeyStore {
+        var key: ByteArray? = null
+        override fun dataKey() = key
+        override fun setDataKey(key: ByteArray) { this.key = key }
+        override fun clear() { key = null }
+    }
+
+    @Test fun backupAndRestoreBetweenTwoLibraries() {
+        val drive = MemoryDrive()
+        val files = listOf("sync-a.db", "sync-b.db").map { File(context.cacheDir, it).also(File::delete) }
+        BundledSqlDriver(files[0]).use { da ->
+            BundledSqlDriver(files[1]).use { db ->
+                val a = Library(da).also { it.open(); it.seedDefaults() }
+                val b = Library(db).also { it.open(); it.seedDefaults() }
+                val now = System.currentTimeMillis()
+                val id = (a.upsertArticle(null, FeedItem("https://e.com/x", "Saved on A", "", now, "Excerpt.", ContentType.Blog, listOf("LLMs")), now) as UpsertResult.Inserted).id
+                a.save(id, now, "note from A")
+                com.samacharam.core.sync.SyncEngine(a, drive, MemoryKeys()) { now }.apply { createBackup("passphrase for test".toCharArray()); sync() }
+                val engineB = com.samacharam.core.sync.SyncEngine(b, drive, MemoryKeys()) { now + 1000 }
+                engineB.unlock("passphrase for test".toCharArray())
+                engineB.sync()
+                assertEquals("note from A", b.note(b.articleIdForUrl("https://e.com/x")!!))
+            }
+        }
+        files.forEach(File::delete)
+    }
+}

@@ -135,6 +135,9 @@ fun SettingsScreen(ctx: AppContext, onModels: () -> Unit) {
         }) { Text("Clean up now") }
 
         HorizontalDivider()
+        SyncSection(ctx)
+
+        HorizontalDivider()
         SectionTitle("Bring data from the computer app")
         Hint("In the web app, use Export to save samacha-library.json, copy it to this phone, then import it here. Nothing connects to your computer.")
         OutlinedButton(onClick = { importer.launch(arrayOf("application/json", "text/plain", "*/*")) }) { Text("Import export file") }

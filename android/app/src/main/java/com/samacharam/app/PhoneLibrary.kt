@@ -171,6 +171,7 @@ class OkHttpFeedTransport : FeedTransport {
 class PhoneRefreshWorker(context: Context, parameters: WorkerParameters) : Worker(context, parameters) {
     override fun doWork(): Result = try {
         PhoneLibrary.refresher(applicationContext).refresh()
+        PhoneSync.syncInBackground(applicationContext)
         BriefingNotifier.notifyIfDue(applicationContext)
         Result.success()
     } catch (_: Exception) {

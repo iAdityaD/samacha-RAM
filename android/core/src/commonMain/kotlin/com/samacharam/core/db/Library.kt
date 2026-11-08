@@ -146,7 +146,7 @@ class Library(private val db: SqlDriver) {
 
     fun upsertSource(key: String, name: String, url: String, type: ContentType, topic: String, enabled: Boolean = true): Long {
         val canonical = canonicalUrl(url)
-        val topicId = topicId(topic)
+        val topicId = topic.trim().ifEmpty { null }?.let { topicId(it) } // a source may have no default topic
         db.execute(
             """INSERT INTO source(key,name,url,type,topic_id,enabled) VALUES(?,?,?,?,?,?)
                ON CONFLICT(key) DO UPDATE SET name=excluded.name, url=excluded.url, type=excluded.type,
@@ -457,6 +457,50 @@ class Library(private val db: SqlDriver) {
     }
 
     fun deleteMission(id: Long) = db.execute("DELETE FROM mission WHERE id=?", listOf(id))
+
+    // ---- sync helpers: stable identities that are the same on every device ----
+
+    /** Missions with their creation time, which (with the title) identifies them across devices. */
+    fun missionRecords(): List<Pair<Long, Long>> = db.query("SELECT id, created FROM mission") { it.long(0)!! to it.long(1)!! }
+
+    /** Every highlight with its article URL. */
+    fun highlightsWithUrls(): List<Pair<String, Highlight>> = db.query(
+        "SELECT a.url, h.id, h.quote, h.note, h.doc_version, h.anchor, h.created FROM highlight h JOIN article a ON a.id=h.article_id",
+    ) { it.string(0)!! to Highlight(it.long(1)!!, it.string(2)!!, it.bytes(3)?.let(TextCodec::decode) ?: "", it.string(4), it.string(5), it.long(6)!!) }
+
+    fun deleteHighlight(id: Long) = db.execute("DELETE FROM highlight WHERE id=?", listOf(id))
+
+    fun sourceKeyForUrl(url: String): String? =
+        db.query("SELECT key FROM source WHERE url=?", listOf(canonicalUrl(url))) { it.string(0) }.firstOrNull()
+
+    fun articleIdForUrl(url: String): Long? =
+        db.query("SELECT id FROM article WHERE url_hash=?", listOf(urlHash(canonicalUrl(url)))) { it.long(0) }.firstOrNull()
+
+    /**
+     * Makes sure an article exists for an item saved on another device, even if this device pruned it earlier.
+     * Existing local content is kept when the incoming copy has no excerpt.
+     */
+    fun ensureArticle(item: FeedItem, now: Long): Long = db.transaction {
+        articleIdForUrl(item.url)?.let { id ->
+            if (item.excerpt.isNotEmpty()) upsertArticle(null, item, now, detectDuplicates = false)
+            return@transaction id
+        }
+        db.execute("DELETE FROM seen_url WHERE url_hash=?", listOf(urlHash(canonicalUrl(item.url))))
+        when (val r = upsertArticle(null, item, now, detectDuplicates = false)) {
+            is UpsertResult.Inserted -> r.id
+            is UpsertResult.Updated -> r.id
+            is UpsertResult.Unchanged -> r.id
+            else -> throw IllegalStateException("Could not restore ${item.url}.")
+        }
+    }
+
+    /** Replaces a saved item's note exactly (sync); [save] only sets notes when one is given. */
+    fun setSaved(articleId: Long, savedAt: Long, note: String) = db.transaction {
+        db.execute("INSERT OR IGNORE INTO saved(article_id,saved_at) VALUES(?,?)", listOf(articleId, savedAt))
+        db.execute("UPDATE saved SET saved_at=?, note=? WHERE article_id=?", listOf(savedAt, encodeOrNull(note.take(20_000)), articleId))
+    }
+
+    fun savedAt(articleId: Long): Long? = db.query("SELECT saved_at FROM saved WHERE article_id=?", listOf(articleId)) { it.long(0) }.firstOrNull()
 
     // ---- retention ----
 
