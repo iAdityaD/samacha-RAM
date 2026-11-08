@@ -310,7 +310,7 @@ class Library(private val db: SqlDriver) {
     }
 
     private val articleColumns =
-        "a.id, a.url, COALESCE(s.key,''), a.title, COALESCE(a.authors,''), a.published, a.first_seen, a.type, a.excerpt, a.minutes, a.flags"
+        "a.id, a.url, COALESCE(s.key,''), a.title, COALESCE(a.authors,''), a.published, a.first_seen, a.type, a.excerpt, a.minutes, a.flags, COALESCE(s.name,'')"
 
     private fun readArticle(row: SqlRow, topics: Map<Long, List<String>>): Article {
         val id = row.long(0)!!
@@ -319,6 +319,7 @@ class Library(private val db: SqlDriver) {
             published = row.long(5), firstSeen = row.long(6)!!, type = ContentType.fromCode(row.long(7)!!.toInt()),
             topics = topics[id].orEmpty(), excerpt = row.bytes(8)?.let(TextCodec::decode) ?: "",
             minutes = row.long(9)!!.toInt(), starter = (row.long(10)!! and ArticleFlags.STARTER) != 0L,
+            sourceName = row.string(11) ?: "",
         )
     }
 
@@ -401,7 +402,7 @@ class Library(private val db: SqlDriver) {
             "SELECT $articleColumns, v.saved_at, v.note FROM saved v JOIN article a ON a.id=v.article_id LEFT JOIN source s ON s.id=a.source_id ORDER BY v.saved_at DESC",
         ) { row ->
             val article = readArticle(row, topics)
-            SavedItem(article, row.long(11)!!, row.bytes(12)?.let(TextCodec::decode) ?: "", highlights[article.id].orEmpty())
+            SavedItem(article, row.long(12)!!, row.bytes(13)?.let(TextCodec::decode) ?: "", highlights[article.id].orEmpty())
         }
     }
 

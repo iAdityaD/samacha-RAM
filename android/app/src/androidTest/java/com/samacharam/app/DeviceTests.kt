@@ -8,6 +8,7 @@ import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.samacharam.core.ContentType
@@ -66,7 +67,12 @@ class ScreensTest {
     private fun waitFor(text: String, timeout: Long = 20_000) =
         rule.waitUntil(timeout) { rule.onAllNodesWithText(text, substring = true, ignoreCase = true).fetchSemanticsNodes().isNotEmpty() }
 
-    private fun tap(text: String) { waitFor(text); rule.onAllNodesWithText(text, ignoreCase = true)[0].performClick(); rule.waitForIdle() }
+    private fun tap(text: String) {
+        waitFor(text)
+        val node = rule.onAllNodesWithText(text, ignoreCase = true)[0]
+        runCatching { node.performScrollTo() } // items below the fold must be on screen to receive the click
+        node.performClick(); rule.waitForIdle()
+    }
 
     private fun tapIcon(description: String) {
         rule.waitUntil(20_000) { rule.onAllNodesWithContentDescription(description).fetchSemanticsNodes().isNotEmpty() }
@@ -84,7 +90,7 @@ class ScreensTest {
         val bytes = java.io.ByteArrayOutputStream().also { full.compress(Bitmap.CompressFormat.JPEG, 80, it) }.toByteArray()
         val data = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
         val chunks = data.chunked(3000)
-        chunks.forEachIndexed { i, c -> android.util.Log.i("SCREENSHOT", "$name ${i + 1}/${chunks.size} $c") }
+        chunks.forEachIndexed { i, c -> android.util.Log.i("SCREENSHOT", "$name ${i + 1}/${chunks.size} $c"); Thread.sleep(8) } // avoid log rate limiting
     }
 
     @Test fun walkThroughTheApp() {

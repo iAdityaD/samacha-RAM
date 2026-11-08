@@ -120,10 +120,10 @@ fun ArticleCard(article: Article, saved: Boolean, reason: String?, layer: Layer?
     ElevatedCard(onClick = actions.onOpen, modifier = modifier.fillMaxWidth()) {
         Column(Modifier.padding(start = 16.dp, top = 14.dp, end = 4.dp, bottom = 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                SourceAvatar(article.sourceKey.ifBlank { hostOf(article.url) }, article.sourceKey.ifBlank { article.url }, 28)
+                SourceAvatar(article.sourceName.ifBlank { hostOf(article.url) }, article.sourceKey.ifBlank { article.url }, 28)
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(article.sourceKey.ifBlank { hostOf(article.url) }, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(article.sourceName.ifBlank { hostOf(article.url) }, style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text("${timeAgo(article.published)} · ${article.minutes} min", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 IconButton(onClick = actions.onToggleSave) {

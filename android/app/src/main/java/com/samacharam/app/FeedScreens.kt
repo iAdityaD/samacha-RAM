@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.Article
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.BookmarkBorder
 import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.FileDownload
@@ -109,7 +110,10 @@ fun TodayScreen(ctx: AppContext, nav: NavHostController) {
         IconButton(onClick = { nav.navigate(Routes.EXPLORE) }) { Icon(Icons.Outlined.Search, contentDescription = "Search") }
         IconButton(onClick = { refresh(ctx) }, enabled = !ctx.busy) { Icon(Icons.Outlined.Refresh, contentDescription = "Refresh") }
     }) { padding ->
-        PullToRefreshBox(isRefreshing = ctx.busy, onRefresh = { refresh(ctx) }, modifier = Modifier.padding(padding).fillMaxSize()) {
+        // The spinner belongs to the pull gesture; toolbar refreshes use the top progress bar instead.
+        var pulled by remember { mutableStateOf(false) }
+        if (!ctx.busy) pulled = false
+        PullToRefreshBox(isRefreshing = pulled && ctx.busy, onRefresh = { pulled = true; refresh(ctx) }, modifier = Modifier.padding(padding).fillMaxSize()) {
             LazyColumn(contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 item {
                     Text("${greeting()} · ${java.time.LocalDate.now().format(DateTimeFormatter.ofPattern("EEEE, d MMMM"))}",
@@ -284,7 +288,7 @@ fun LibraryScreen(ctx: AppContext, nav: NavHostController) {
                     0 -> {
                         val list = saved
                         if (list != null && list.isEmpty()) item {
-                            EmptyState(Icons.Outlined.Search, "Nothing saved yet", "Tap the bookmark on any item, or share a link from your browser to samacha·RAM.")
+                            EmptyState(Icons.Outlined.BookmarkBorder, "Nothing saved yet", "Tap the bookmark on any item, or share a link from your browser to samacha·RAM.")
                         }
                         items(list.orEmpty(), key = { it.article.id }) { item ->
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

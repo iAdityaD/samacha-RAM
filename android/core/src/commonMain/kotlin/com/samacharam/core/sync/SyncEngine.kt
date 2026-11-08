@@ -159,9 +159,11 @@ class SyncEngine(
         // 1. Local edits since the last sync become records stamped now; untouched records keep their stamps.
         val base = loadBase()
         val local = SyncState.snapshot(library)
+        val names = remote.list().filter { it.startsWith("device-") && it.endsWith(".srs") && it != ownFile }
         // A device joining an existing backup has no base. Its records (often just first-run defaults) count as
         // the oldest, so the backup wins on overlaps; records only this device has are still kept and uploaded.
-        val joining = base.isEmpty()
+        // The first device has no base either, but there is nothing to join, so its edits get normal stamps.
+        val joining = base.isEmpty() && names.isNotEmpty()
         val current = HashMap<String, SyncRecord>()
         val editedHere = HashSet<String>()
         for ((key, payload) in local) {
@@ -176,7 +178,6 @@ class SyncEngine(
         }
 
         // 2. Merge every other device's file. A damaged or undecryptable file stops the sync before anything changes.
-        val names = remote.list().filter { it.startsWith("device-") && it.endsWith(".srs") && it != ownFile }
         val merged = HashMap(current)
         var conflicts = 0
         for (name in names) {

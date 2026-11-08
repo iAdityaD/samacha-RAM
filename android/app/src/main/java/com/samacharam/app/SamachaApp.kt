@@ -283,7 +283,7 @@ fun AppPage(
 @Composable
 fun PageColumn(padding: PaddingValues, content: @Composable ColumnScope.() -> Unit) {
     androidx.compose.foundation.layout.Column(
-        Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(bottom = 24.dp),
+        Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(bottom = 96.dp), // clears floating buttons
         content = content,
     )
 }

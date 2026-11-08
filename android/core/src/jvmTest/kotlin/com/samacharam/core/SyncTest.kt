@@ -58,6 +58,8 @@ class SyncTest {
 
     @Test fun secondPhoneRestoresEverythingAndKeepsTheOwnersChoices() {
         val a = phone("a")
+        // Worst case for ties: the joining phone's ID sorts higher, so only correct stamping keeps A's choices.
+        a.library.setMeta("sync.deviceId", "0000000000000000")
         a.engine.createBackup(pass)
         a.library.setLayer("Hardware", Layer.Core)
         a.library.budgetMinutes = 25
@@ -68,6 +70,7 @@ class SyncTest {
         a.sync()
 
         val b = phone("b")
+        b.library.setMeta("sync.deviceId", "ffffffffffffffff")
         assertTrue(b.engine.backupExists())
         b.engine.unlock(pass)
         val report = b.sync()

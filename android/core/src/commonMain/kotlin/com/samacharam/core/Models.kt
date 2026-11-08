@@ -53,6 +53,8 @@ data class Article(
     val excerpt: String,
     val minutes: Int,
     val starter: Boolean = false,
+    /** The source's display name, e.g. "Hugging Face"; empty for shared links. */
+    val sourceName: String = "",
 )
 
 data class Feedback(val articleId: Long, val topics: List<String>, val reason: FeedbackReason, val createdAt: Long)

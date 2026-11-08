@@ -140,10 +140,10 @@ fun ArticleScreen(ctx: AppContext, nav: NavHostController, id: Long) {
         PageColumn(padding) {
             Column(Modifier.padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    SourceAvatar(a.sourceKey.ifBlank { hostOf(a.url) }, a.sourceKey.ifBlank { a.url })
+                    SourceAvatar(a.sourceName.ifBlank { hostOf(a.url) }, a.sourceKey.ifBlank { a.url })
                     Spacer(Modifier.width(10.dp))
                     Column {
-                        Text(a.sourceKey.ifBlank { hostOf(a.url) }, style = MaterialTheme.typography.labelLarge)
+                        Text(a.sourceName.ifBlank { hostOf(a.url) }, style = MaterialTheme.typography.labelLarge)
                         Text(listOfNotNull(a.authors.ifBlank { null }, a.published?.let(::formatDate)).joinToString(" · ").ifEmpty { "Date unknown" },
                             style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
@@ -218,7 +218,7 @@ fun ArticleScreen(ctx: AppContext, nav: NavHostController, id: Long) {
                 related.orEmpty().forEach { r ->
                     ListItem(
                         headlineContent = { Text(r.title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-                        supportingContent = { Text("${r.sourceKey.ifBlank { hostOf(r.url) }} · ${timeAgo(r.published)} · shared topics, not a verified link") },
+                        supportingContent = { Text("${r.sourceName.ifBlank { hostOf(r.url) }} · ${timeAgo(r.published)} · shared topics, not a verified link") },
                         modifier = Modifier.padding(horizontal = 4.dp).let { m -> m.then(Modifier) },
                         trailingContent = { IconButton(onClick = { nav.navigate(Routes.article(r.id)) }) { Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = "Open") } },
                     )
