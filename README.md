@@ -1,6 +1,4 @@
-# samacha-RAM
-
-**Update — 18 October 2026:** this repository now also includes a native Kotlin/Compose Android client, on-device ONNX and LiteRT-LM adapters, a versioned document/evidence workspace, offline edit replay, watchlists, and model-backed retrieval. See [the v0.2 guide](docs/release-v0.2.md) for the current feature matrix, Android setup, and remaining validation limits. Earlier foundation notes below are retained where useful; the v0.2 guide takes precedence where functionality changed.
+**Update — November 2026 (v0.3, Android):** the Android app is now standalone. It keeps its own compressed library on the phone, refreshes public feeds itself, and lets you connect a model per task (on the phone, on your own network, or a cloud API with your key). No computer is needed. See [the Android plan and results](docs/android-plan.md). The Python host and web app below remain available as a desktop companion; their export file can be imported on the phone. The [v0.2 guide](docs/release-v0.2.md) describes the web/host features.
 
 **Your interests. Your sources. Your models.**
 
@@ -97,9 +95,9 @@ Models run on CPU in a serialized local inference lane; only one pipeline is ret
 
 ## Android and offline use
 
-Use the browser's **Install app / Add to Home screen** on a secure origin. On localhost, the PWA can cache its shell. Accessing a computer's plain HTTP LAN address from a phone is not a secure origin and may not allow service workers/installability; use a trusted HTTPS reverse proxy for that setup.
+The native app in `android/` (v0.3) works without this host: it stores its library on the phone, refreshes feeds over the internet, and runs on-device or connected models. Build it with `gradle -p android assembleDebug` (Android SDK 35, JDK 17) or download the `samacha-RAM-debug-apk` artifact from the **Android build** workflow. To bring data from this web app, use **Export** here and **Settings → Import export file** on the phone. See [docs/android-plan.md](docs/android-plan.md).
 
-The backend is required for mutations, feed refresh, authentication, and inference. When it is unavailable, the last cached source excerpts, saved items/notes, and preferences can be viewed. Offline edits, background push notifications, and native on-phone model execution are not implemented. This is **not** a native Android package, and downloaded models run on the app host rather than in the phone browser.
+For the web app on a phone browser: use **Install app / Add to Home screen** on a secure origin. Accessing a computer's plain HTTP LAN address from a phone is not a secure origin and may not allow service workers or installation; use a trusted HTTPS reverse proxy for that setup. When the host is unavailable, cached excerpts, saved items, notes, and preferences can still be viewed in the browser.
 
 ## Authentication and hosting
 

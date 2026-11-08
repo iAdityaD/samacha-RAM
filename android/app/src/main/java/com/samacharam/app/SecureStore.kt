@@ -25,6 +25,7 @@ class SecureStore(context: Context) {
         val bytes = cipher.iv + cipher.doFinal(value.toByteArray())
         prefs.edit().putString(name, Base64.encodeToString(bytes, Base64.NO_WRAP)).apply()
     }
+    @Synchronized fun remove(name: String) { prefs.edit().remove(name).apply() }
     @Synchronized fun get(name: String): String? {
         val raw = prefs.getString(name, null) ?: return null
         return try {
