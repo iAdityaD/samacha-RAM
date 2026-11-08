@@ -103,6 +103,7 @@ import com.samacharam.core.ai.ModelRouter
 import com.samacharam.core.db.Library
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /** Shared app objects and one place to run work off the main thread and report the outcome. */
@@ -116,6 +117,8 @@ class AppContext(val activity: ComponentActivity) {
     var version by mutableIntStateOf(0)
     var message by mutableStateOf<String?>(null)
     var busy by mutableStateOf(false)
+    /** Serializes screen loads on the single database connection. */
+    val reads = kotlinx.coroutines.sync.Mutex()
 
     /** Ask conversations for this session, keyed by story id (-1 is the whole library). */
     val askThreads = androidx.compose.runtime.mutableStateMapOf<Long, List<AskMessage>>()
@@ -168,9 +171,10 @@ fun <T> rememberLoaded(ctx: AppContext, vararg keys: Any?, load: () -> T): State
     val state = remember { mutableStateOf<T?>(null) }
     val reloadKey: List<Any?> = listOf(ctx.version, *keys)
     LaunchedEffect(reloadKey) {
-        state.value = withContext(Dispatchers.IO) {
-            runCatching(load).onFailure { ctx.message = it.message ?: "Could not load data." }.getOrNull()
-        }
+        // Reads run one at a time, and a failed reload keeps what is on screen instead of blanking it.
+        withContext(Dispatchers.IO) { ctx.reads.withLock { runCatching(load) } }
+            .onSuccess { state.value = it }
+            .onFailure { ctx.message = it.message ?: "Could not load data." }
     }
     return state
 }
