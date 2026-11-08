@@ -1,23 +1,23 @@
 package com.samacharam.app
 
 import android.content.Intent
-import android.content.res.Configuration
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.work.WorkManager
 
 class MainActivity : ComponentActivity() {
     private lateinit var ctx: AppContext
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         ctx = AppContext(this)
         // Earlier versions scheduled a briefing that called the computer host; the phone library replaces it.
         WorkManager.getInstance(this).cancelUniqueWork("daily-briefing")
         if (savedInstanceState == null) handleShare(intent)
-        val dark = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
-        setContent { SamachaApp(ctx, dark) }
+        setContent { SamachaApp(ctx) }
     }
 
     override fun onNewIntent(intent: Intent) {

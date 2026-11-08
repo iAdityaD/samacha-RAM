@@ -1,7 +1,7 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
-    <application android:label="samacha-RAM" android:theme="@android:style/Theme.Material.Light.NoActionBar" android:allowBackup="false" android:usesCleartextTraffic="true">
+    <application android:label="samacha·RAM" android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher" android:theme="@style/Theme.Samacha" android:allowBackup="false" android:usesCleartextTraffic="true">
         <!-- Plain HTTP is needed for model servers on the owner's LAN (e.g. Ollama). The app restricts it in code:
              core validation allows http:// only for private hosts, and OkHttpTransport checks resolved addresses. -->
         <uses-native-library android:name="libOpenCL.so" android:required="false"/>

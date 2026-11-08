@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
@@ -61,33 +62,52 @@ class LiveFeedsTest {
 class ScreensTest {
     @get:Rule val rule = createAndroidComposeRule<MainActivity>()
 
-    private fun waitForText(text: String, atLeast: Int = 1) =
-        rule.waitUntil(15_000) { rule.onAllNodesWithText(text).fetchSemanticsNodes().size >= atLeast }
+    private fun waitFor(text: String, timeout: Long = 20_000) =
+        rule.waitUntil(timeout) { rule.onAllNodesWithText(text, substring = true).fetchSemanticsNodes().isNotEmpty() }
+
+    private fun tap(text: String) { waitFor(text); rule.onAllNodesWithText(text)[0].performClick(); rule.waitForIdle() }
+
+    private fun tapIcon(description: String) {
+        rule.waitUntil(20_000) { rule.onAllNodesWithContentDescription(description).fetchSemanticsNodes().isNotEmpty() }
+        rule.onAllNodesWithContentDescription(description)[0].performClick(); rule.waitForIdle()
+    }
 
     private fun screenshot(name: String) {
         rule.waitForIdle()
+        Thread.sleep(600) // let transitions settle
         val dir = File(InstrumentationRegistry.getInstrumentation().targetContext.getExternalFilesDir(null), "screens").apply { mkdirs() }
         File(dir, "$name.png").outputStream().use { rule.onRoot().captureToImage().asAndroidBitmap().compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
-    @Test fun everyScreenOpensWithoutCrashing() {
-        waitForText("Follow your curiosity.")
-        screenshot("1-today")
-        listOf(
-            "Library" to "Keep the good things.",
-            "Interests" to "Your interests, in layers.",
-            "Sources" to "Where your news comes from.",
-        ).forEachIndexed { i, (tab, heading) ->
-            rule.onAllNodesWithText(tab)[0].performClick()
-            waitForText(heading)
-            screenshot("${i + 2}-${tab.lowercase()}")
-        }
-        rule.onAllNodesWithText("Settings")[0].performClick()
-        waitForText("Daily briefing")
-        screenshot("5-settings")
-        rule.onAllNodesWithText("Model connections")[0].performClick()
-        waitForText("Which model does each task")
-        screenshot("6-models")
+    @Test fun walkThroughTheApp() {
+        // First launch: onboarding.
+        waitFor("Signal over noise.")
+        screenshot("01-onboarding-welcome")
+        tap("Get started")
+        waitFor("What do you follow?")
+        screenshot("02-onboarding-interests")
+        tap("Continue")
+        tap("Start reading")
+
+        // Today with real feeds.
+        waitFor("Your briefing")
+        tapIcon("Refresh")
+        rule.waitUntil(90_000) { rule.onAllNodesWithText("Picked for your interests").fetchSemanticsNodes().isNotEmpty() }
+        screenshot("03-today")
+        tap("Start reading")
+        waitFor("Ask about this excerpt")
+        screenshot("04-article")
+        tapIcon("Back")
+
+        tap("Explore"); waitFor("Browse your topics"); screenshot("05-explore")
+        tap("Library"); waitFor("Saved"); screenshot("06-library")
+        tap("Interests"); waitFor("Daily reading budget"); screenshot("07-interests")
+        tap("Profile"); waitFor("Your reading space"); screenshot("08-profile")
+        tap("Model connections"); waitFor("Privacy and cost"); screenshot("09-models"); tapIcon("Back")
+        tap("Backup & sync"); waitFor("How it works"); screenshot("10-sync"); tapIcon("Back")
+        tap("Sources"); waitFor("active sources healthy"); screenshot("11-sources"); tapIcon("Back")
+        tap("Appearance"); tap("Dark"); waitFor("Use wallpaper colors"); tapIcon("Back")
+        tap("Today"); waitFor("Your briefing"); screenshot("12-today-dark")
     }
 }
 

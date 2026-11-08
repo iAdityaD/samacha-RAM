@@ -350,6 +350,8 @@ class Library(private val db: SqlDriver) {
 
     // ---- library ----
 
+    fun savedIds(): Set<Long> = db.query("SELECT article_id FROM saved") { it.long(0)!! }.toSet()
+
     fun isSaved(articleId: Long): Boolean = db.queryLong("SELECT count(*) FROM saved WHERE article_id=?", listOf(articleId)) > 0
 
     fun note(articleId: Long): String =
@@ -412,6 +414,35 @@ class Library(private val db: SqlDriver) {
             ?: throw IllegalArgumentException("Article not found.")
         db.execute("INSERT INTO history(article_id,kind,at,version) VALUES(?,?,?,?)", listOf(articleId, event.code, now, version))
         return true
+    }
+
+    /** Recent reading events, newest first, for the History tab. */
+    fun historyEntries(limit: Int = 300): List<HistoryEntry> {
+        val topics = topicsById()
+        return db.query(
+            "SELECT h.kind, h.at, $articleColumns FROM history h JOIN article a ON a.id=h.article_id LEFT JOIN source s ON s.id=a.source_id ORDER BY h.id DESC LIMIT ?",
+            listOf(limit),
+        ) { row ->
+            val shifted = object : SqlRow {
+                override fun long(index: Int) = row.long(index + 2)
+                override fun double(index: Int) = row.double(index + 2)
+                override fun string(index: Int) = row.string(index + 2)
+                override fun bytes(index: Int) = row.bytes(index + 2)
+            }
+            HistoryEntry(readArticle(shifted, topics), ReadingEvent.entries.firstOrNull { it.code.toLong() == row.long(0) } ?: ReadingEvent.MetadataOpen, row.long(1)!!)
+        }
+    }
+
+    /** Items sharing the most topics with [articleId]; labeled as topic similarity, never as a factual relation. */
+    fun related(articleId: Long, limit: Int = 5): List<Article> {
+        val target = article(articleId) ?: return emptyList()
+        val muted = profile().topics.filterValues { it == Layer.Muted }.keys
+        return articles(1_000).asSequence()
+            .filter { it.id != articleId && it.topics.none { t -> t in muted } }
+            .map { it to it.topics.count { t -> t in target.topics } }
+            .filter { it.second > 0 }
+            .sortedWith(compareByDescending<Pair<Article, Int>> { it.second }.thenByDescending { it.first.published ?: 0L })
+            .take(limit).map { it.first }.toList()
     }
 
     fun readIds(): Set<Long> =
@@ -596,3 +627,5 @@ val DEFAULT_LAYERS = listOf(
     "LLMs" to Layer.Core, "NLP" to Layer.Near, "Software" to Layer.Near,
     "Hardware" to Layer.Adjacent, "AI audio" to Layer.Adjacent, "AI video" to Layer.Discovery,
 )
+
+data class HistoryEntry(val article: Article, val event: ReadingEvent, val at: Long)

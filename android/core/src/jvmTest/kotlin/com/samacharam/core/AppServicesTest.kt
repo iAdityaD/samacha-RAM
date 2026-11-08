@@ -104,6 +104,26 @@ class AppServicesTest {
         assertEquals("", library.note(add(2, "Other", "LLMs")))
     }
 
+    @Test fun historyListsEventsNewestFirst() {
+        val a = add(1, "Retrieval study", "LLMs")
+        val b = add(2, "Chip roadmap", "Hardware")
+        library.recordEvent(a, ReadingEvent.SummaryOpen, now)
+        library.recordEvent(b, ReadingEvent.MarkRead, now + 1)
+        val history = library.historyEntries()
+        assertEquals(listOf(b, a), history.map { it.article.id })
+        assertEquals(ReadingEvent.MarkRead, history.first().event)
+        assertEquals("Chip roadmap", history.first().article.title)
+    }
+
+    @Test fun relatedItemsShareTopicsAndSkipMuted() {
+        val a = add(1, "Retrieval study", "LLMs")
+        val b = add(2, "Another LLM paper", "LLMs")
+        add(3, "Chip roadmap", "Hardware")
+        library.upsertArticle("hf", FeedItem("https://e.com/m", "Muted mix", "", now, "x", ContentType.Blog, listOf("LLMs", "Crypto")), now)
+        library.setLayer("Crypto", Layer.Muted)
+        assertEquals(listOf(b), library.related(a).map { it.id })
+    }
+
     @Test fun storageStatsIncludeDetails() {
         add(1, "Retrieval study", "LLMs")
         val stats = library.stats()
