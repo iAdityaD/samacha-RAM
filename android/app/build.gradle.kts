@@ -6,6 +6,19 @@ android {
     buildFeatures { compose = true; buildConfig = true }
     compileOptions { sourceCompatibility = JavaVersion.VERSION_17; targetCompatibility = JavaVersion.VERSION_17 }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
+    // The owner's permanent key, supplied by CI secrets. Google sign-in only works for APKs signed with it.
+    // Without it (local builds, forks) the default throwaway debug key is used.
+    val keystorePath = System.getenv("ANDROID_KEYSTORE_PATH")
+    if (keystorePath != null) {
+        signingConfigs.create("owner") {
+            storeFile = file(keystorePath)
+            storePassword = System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            keyAlias = System.getenv("ANDROID_KEY_ALIAS")
+            keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+        }
+        buildTypes.getByName("debug").signingConfig = signingConfigs.getByName("owner")
+        buildTypes.getByName("release").signingConfig = signingConfigs.getByName("owner")
+    }
 }
 dependencies {
     implementation(project(":core"))
