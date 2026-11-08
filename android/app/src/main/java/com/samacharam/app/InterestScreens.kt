@@ -28,6 +28,11 @@ import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Timer
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.Button
+import androidx.compose.material.icons.outlined.ArrowDropDown
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -105,20 +110,24 @@ fun InterestsScreen(ctx: AppContext, nav: NavHostController) {
                 if (topics.isEmpty()) return@forEach
                 item(key = "h-$layer") { SectionHeader("${layer.name} · ${LAYER_HELP[layer]}") }
                 items(topics, key = { it }) { topic ->
+                    var menu by remember { mutableStateOf(false) }
                     Card(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
-                        Column(Modifier.padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 12.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(Icons.Outlined.Tune, null, tint = MaterialTheme.colorScheme.primary)
-                                Spacer(Modifier.width(12.dp))
-                                Text(topic, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
-                                IconButton(onClick = { removing = topic }) { Icon(Icons.Outlined.Delete, contentDescription = "Remove $topic") }
-                            }
-                            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(end = 12.dp)) {
-                                Layer.entries.forEachIndexed { i, l ->
-                                    SegmentedButton(selected = layer == l, onClick = { ctx.quick { ctx.library.setLayer(topic, l); null } },
-                                        shape = SegmentedButtonDefaults.itemShape(i, Layer.entries.size), icon = {}) {
-                                        Text(l.name.take(4), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                        Row(Modifier.padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.Tune, null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(Modifier.width(12.dp))
+                            Text(topic, style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                            Box {
+                                AssistChip(onClick = { menu = true }, label = { Text(layer.name) }, trailingIcon = { Icon(Icons.Outlined.ArrowDropDown, contentDescription = "Change layer for $topic") })
+                                DropdownMenu(menu, { menu = false }) {
+                                    Layer.entries.forEach { l ->
+                                        DropdownMenuItem(
+                                            text = { Column { Text(l.name); Text(LAYER_HELP.getValue(l), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) } },
+                                            leadingIcon = { RadioButton(selected = layer == l, onClick = null) },
+                                            onClick = { menu = false; ctx.quick { ctx.library.setLayer(topic, l); null } },
+                                        )
                                     }
+                                    HorizontalDivider()
+                                    MenuRow("Remove topic", Icons.Outlined.Delete) { menu = false; removing = topic }
                                 }
                             }
                         }

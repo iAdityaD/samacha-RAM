@@ -93,7 +93,12 @@ class ScreensTest {
         chunks.forEachIndexed { i, c -> android.util.Log.i("SCREENSHOT", "$name ${i + 1}/${chunks.size} $c"); Thread.sleep(8) } // avoid log rate limiting
     }
 
-    @Test fun walkThroughTheApp() {
+    /** Back to Profile, waiting for the transition to finish before the next tap. */
+    private fun backToProfile() { tapIcon("Back"); waitFor("Your reading space") }
+
+    @Test fun walkThroughTheApp() = try { walk() } catch (e: Throwable) { screenshot("error-state"); throw e }
+
+    private fun walk() {
         // First launch: onboarding.
         waitFor("Signal over noise.")
         screenshot("01-onboarding-welcome")
@@ -118,11 +123,11 @@ class ScreensTest {
         tap("Library"); waitFor("Saved"); screenshot("06-library")
         tap("Interests"); waitFor("Daily reading budget"); screenshot("07-interests")
         tap("Profile"); waitFor("Your reading space"); screenshot("08-profile")
-        tap("Model connections"); waitFor("Privacy and cost"); screenshot("09-models"); tapIcon("Back")
-        tap("Backup & sync"); waitFor("How it works"); screenshot("10-sync"); tapIcon("Back")
-        tap("Sources"); waitFor("active sources healthy"); screenshot("11-sources"); tapIcon("Back")
-        tap("Appearance"); tap("Dark"); waitFor("Use wallpaper colors"); tapIcon("Back")
-        tap("Today"); waitFor("Your briefing"); screenshot("12-today-dark")
+        tap("Model connections"); waitFor("Privacy and cost"); screenshot("09-models"); backToProfile()
+        tap("Backup & sync"); waitFor("How it works"); screenshot("10-sync"); backToProfile()
+        tap("Sources"); waitFor("active sources healthy"); screenshot("11-sources"); backToProfile()
+        tap("Appearance"); tap("Dark"); waitFor("Use wallpaper colors"); screenshot("12-appearance-dark"); backToProfile()
+        tap("Today"); waitFor("Your briefing"); screenshot("13-today-dark")
     }
 }
 
