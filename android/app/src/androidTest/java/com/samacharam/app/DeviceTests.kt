@@ -125,9 +125,9 @@ class ScreensTest {
         // Today with real feeds.
         waitFor("Your briefing")
         tapIcon("Refresh")
-        try { waitFor("Read next", 90_000) } catch (e: Throwable) { screenshot("error-today"); throw e }
+        try { waitFor("Start briefing", 90_000) } catch (e: Throwable) { screenshot("error-today"); throw e }
         screenshot("03-today")
-        tap("Read next")
+        tap("Start briefing")
         waitFor("Your note")
         screenshot("04-article")
         tapIcon("Back")

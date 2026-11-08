@@ -81,8 +81,11 @@ import com.samacharam.core.Layer
 
 val colors: Palette @Composable get() = LocalPalette.current
 
-fun timeAgo(epochMs: Long?): String =
-    epochMs?.let { DateUtils.getRelativeTimeSpanString(it, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS, DateUtils.FORMAT_ABBREV_RELATIVE).toString() } ?: "Date unknown"
+fun timeAgo(epochMs: Long?): String = when {
+    epochMs == null -> "Date unknown"
+    System.currentTimeMillis() - epochMs in 0..59_999 -> "just now"
+    else -> DateUtils.getRelativeTimeSpanString(epochMs, System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS, DateUtils.FORMAT_ABBREV_RELATIVE).toString()
+}
 
 fun hostOf(url: String): String = url.substringAfter("://").substringBefore('/').removePrefix("www.")
 

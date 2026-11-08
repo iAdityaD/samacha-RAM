@@ -165,11 +165,12 @@ fun TodayScreen(ctx: AppContext, nav: NavHostController) {
             Banner(Icons.Outlined.CloudOff, "${d.failing} of ${d.activeSources} sources unavailable", "Review") { nav.navigate(Routes.SOURCES) }
         }
 
-        // The briefing is the primary daily path.
+        // The briefing is the primary daily path: its action sits directly under the header, above the fold.
         val q = d.briefing
+        val readCount = q.articles.count { it.id in d.seen }
         item(key = "briefing-label") {
             SectionLabel("Your briefing", trailing = {
-                if (q.articles.isNotEmpty()) Text("${q.minutes} of ${q.budgetMinutes} min", style = TypeRole.meta, color = colors.inkMuted, modifier = Modifier.padding(end = Space.m))
+                if (q.articles.isNotEmpty()) Text("$readCount of ${q.articles.size} read · ${q.minutes} min", style = TypeRole.meta, color = colors.inkMuted, modifier = Modifier.padding(end = Space.m))
             })
         }
         if (q.articles.isEmpty()) item(key = "caught-up") {
@@ -178,26 +179,31 @@ fun TodayScreen(ctx: AppContext, nav: NavHostController) {
                     Icon(Icons.Outlined.TaskAlt, null, tint = colors.evergreen); Spacer(Modifier.width(Space.s))
                     Text("You're caught up", style = TypeRole.headline, color = colors.ink)
                 }
-                Text("Nothing unread fits your interests right now. New items arrive as your sources publish.", style = TypeRole.ui, color = colors.inkMuted)
+                Text("Nothing unread fits your interests right now. New stories arrive as your sources publish.", style = TypeRole.ui, color = colors.inkMuted)
             }
         } else {
-            item(key = "progress") {
-                LinearProgressIndicator(
-                    progress = { q.minutes.toFloat() / q.budgetMinutes.coerceAtLeast(1) }, color = colors.saffron, trackColor = colors.rule,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = Space.gutter).height(3.dp).clip(RoundedCornerShape(2.dp))
-                        .semantics { contentDescription = "Briefing uses ${q.minutes} of ${q.budgetMinutes} minutes" },
-                )
+            item(key = "briefing-start") {
+                Column(Modifier.padding(horizontal = Space.gutter), verticalArrangement = Arrangement.spacedBy(Space.m)) {
+                    LinearProgressIndicator(
+                        progress = { readCount.toFloat() / q.articles.size }, color = colors.saffron, trackColor = colors.rule,
+                        modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp))
+                            .semantics { contentDescription = "$readCount of ${q.articles.size} briefing stories read" },
+                    )
+                    val next = q.articles.firstOrNull { it.id !in d.seen }
+                    PrimaryButton(
+                        when { next == null -> "Briefing finished · read again"; readCount == 0 -> "Start briefing"; else -> "Continue · ${readCount + 1} of ${q.articles.size}" },
+                        { nav.navigate(Routes.article((next ?: q.articles.first()).id)) }, Modifier.fillMaxWidth(),
+                    )
+                }
             }
-            val visible = if (showAll) q.articles else q.articles.take(5)
+            val visible = if (showAll) q.articles else q.articles.take(3)
             items(visible, key = { "b-${it.id}" }) { a ->
                 StoryRow(a, a.id in d.saved, a.id !in d.seen, null, onOpen = { nav.navigate(Routes.article(a.id)) }, onToggleSave = { ctx.toggleSave(a.id) },
                     onActions = { sheet = a }, showDek = false, rank = q.articles.indexOf(a) + 1)
             }
-            item(key = "briefing-actions") {
-                Row(Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = Space.l), horizontalArrangement = Arrangement.spacedBy(Space.m)) {
-                    val next = q.articles.firstOrNull { it.id !in d.seen } ?: q.articles.first()
-                    PrimaryButton(if (next.id in d.seen) "Start again" else "Read next", { nav.navigate(Routes.article(next.id)) })
-                    if (q.articles.size > 5) SecondaryButton(if (showAll) "Show fewer" else "All ${q.articles.size}", { showAll = !showAll })
+            if (q.articles.size > 3) item(key = "briefing-more") {
+                Row(Modifier.fillMaxWidth().padding(horizontal = Space.gutter, vertical = Space.s)) {
+                    SecondaryButton(if (showAll) "Show fewer" else "All ${q.articles.size} in your briefing", { showAll = !showAll })
                 }
             }
         }
