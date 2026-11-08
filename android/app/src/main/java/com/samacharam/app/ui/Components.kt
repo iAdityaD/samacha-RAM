@@ -3,7 +3,11 @@ package com.samacharam.app.ui
 import android.text.format.DateUtils
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -202,8 +206,9 @@ fun SaveToggle(saved: Boolean, onToggle: () -> Unit) {
 
 @Composable
 fun StorySkeleton(rows: Int = 4) {
-    val pulse by androidx.compose.animation.core.rememberInfiniteTransition(label = "skeleton").animateFloat(
-        0.45f, 0.9f, androidx.compose.animation.core.infiniteRepeatable(tween(1200), androidx.compose.animation.core.RepeatMode.Reverse), label = "pulse",
+    val pulse by rememberInfiniteTransition(label = "skeleton").animateFloat(
+        initialValue = 0.45f, targetValue = 0.9f,
+        animationSpec = infiniteRepeatable(tween(1200), RepeatMode.Reverse), label = "pulse",
     )
     Column(Modifier.alpha(pulse).semantics { contentDescription = "Loading" }) {
         repeat(rows) {
